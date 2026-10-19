@@ -1,0 +1,9 @@
+[package]
+name = "hafthi_world"
+version = "0.1.0"
+edition = "2024"
+description = "A Viking Age Gotland world-building prototype"
+publish = false
+
+[dependencies]
+bevy = "0.20"
