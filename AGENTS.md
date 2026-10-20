@@ -25,3 +25,9 @@ You are working on **hafthiWorld**, a Rust/Bevy 0.20 3D world-building game insp
 Create the **first visually convincing coastal diorama**: an irregular low limestone shore, shallow Baltic water with a clear nearshore color transition, animated grass patches, a small timber building with an era-appropriate silhouette and warm late-afternoon lighting. Preserve orbit camera controls. Favor atmospheric coherence over quantity of objects. Split rendering, world generation, and camera into logical Rust modules. Confirm compatibility with Bevy 0.20.
 
 The checked-in initial scene is a placeholder, not a visual target.
+
+## Updated product direction — 2026-10-20 (user-approved)
+
+**Read and implement the scoped plan in [GitHub issue #1](https://github.com/pdahlbeck/hafthiWorld/issues/1).** The game is now explicitly a **settlement/economy simulation with both an overhead strategy view and first-person walkable view of the same persistent simulation**. Remain on **Rust + Bevy**; do not migrate to Unreal or another engine. Begin with **PR 1: camera-mode switching (Tab) and a small persistent ECS proof of shared simulation**. Then iterate resource gathering, logistics, farms, households, barter, seasons, ships and later conflict. Do not attempt the whole roadmap in one PR.
+
+The earlier visual-only coastal-diorama milestone remains important, but it is **no longer the sole first task**. Keep existing rendering working while incrementally adding the hybrid camera/real-world simulation foundation. The art direction remains distinctive and painterly with plausible natural materials and excellent lighting; aim for visually rich realistic behavior without requiring photorealism. All camera modes must observe the same inhabitants, resources, inventory and ongoing tasks. Build and test changes incrementally.
