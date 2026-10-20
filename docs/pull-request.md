@@ -1,0 +1,9 @@
+Tab now switches between the strategy camera and a ground-level first-person view of the same running world. Returning restores the exact strategy pose; first-person position/look are retained. Mouse capture releases on Escape or focus loss, and quitting uses Bevy's normal exit flow. Walking includes meadow bounds and house/limestone collision.
+
+A fixed-step ECS worker transports six finite logs from supply to stockpile. Picking up removes one from supply, carrying moves that same log entity, and unloading adds it to storage. Camera code never mutates the simulation. Both views display the same worker ID, advancing clock, task and material counts. The existing coastal scene is preserved and split into world, simulation, camera and presentation modules; Bevy 0.20 light API mismatches in the initial prototype are corrected.
+
+This implements **PR 1** of #1. Harvesting, player orders, construction, larger populations and economy systems remain later milestones; this PR does not close the roadmap issue. Earlier local art/model experiments are intentionally outside this focused branch based on current main.
+
+Validation: `cargo fmt --check`, `cargo check --locked`, `cargo test --locked` (**6 passed**), `cargo clippy --locked -- -D warnings`, and `cargo build --locked` passed with Rust 1.99.1 / Bevy 0.20. Linux software-Vulkan smoke-tested both modes and continuous worker identity/material flow. macOS/Metal was not tested here. Controls, architecture and reproducible desktop smoke steps are documented in README.
+
+Screenshots: [strategy](https://github.com/pdahlbeck/hafthiWorld/blob/codex/shared-simulation-camera/docs/screenshots/milestone1-strategy.png), [first person](https://github.com/pdahlbeck/hafthiWorld/blob/codex/shared-simulation-camera/docs/screenshots/milestone1-first-person.png).
