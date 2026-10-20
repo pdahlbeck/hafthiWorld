@@ -1,48 +1,75 @@
 # hafthiWorld
 
-**A living world inspired by Viking Age Gotland.**
+Rust + Bevy 0.20 settlement simulation inspired by Viking Age Gotland. The first scoped milestone from [issue #1](https://github.com/pdahlbeck/hafthiWorld/issues/1) adds strategy/first-person views of **one running ECS simulation**. The existing meadow, shallow sea, limestone block, timber building and lighting remain the coastal visual prototype; inhabitants and logs are explicit geometric placeholders.
 
-hafthiWorld is an experimental 3D world-building game set on the Baltic island of Gotland around the 10th century. The goal is a beautiful, painterly landscape grounded in the island's distinct nature and archaeological history.
+## Run
 
-Explore limestone shores, meadows, winding paths, timber farmsteads, harbours and sailing vessels. The first milestone is **visual quality**, not a large gameplay feature set.
-
-## Technology
-
-- **Rust** with **Bevy 0.20**
-- Native desktop development, initially macOS and Linux
-- Original assets and shaders
-- Procedural landscape experiments, with historically researched architecture
-
-## Getting started
-
-Install a recent Rust toolchain using [rustup](https://rustup.rs/), then:
+Install current stable Rust using [rustup](https://rustup.rs/) (edition 2024; tested here with Rust 1.99.1):
 
 ```sh
-git clone https://github.com/pdahlbeck/hafthiWorld.git
-cd hafthiWorld
-cargo run
+cargo run --release --locked
 ```
 
-Controls in the first prototype: **W/A/S/D** orbit camera, **Q/E** zoom, **Escape** quit.
+macOS uses Metal; Linux needs a working graphics driver/display and Bevy's native ALSA, udev, X11/Wayland and xkbcommon development libraries. No server, assets download or credentials are required to play. No macOS performance measurements were made in the Linux cloud environment.
 
-> **Status:** Early prototype. The initial scene uses simple geometric placeholders; the finished visual style remains to be developed.
+## Controls
 
-## Visual direction
+| Input | Strategy | First person |
+| --- | --- | --- |
+| Tab | Enter first person | Restore the previous strategy view |
+| W/A/S/D | Orbit | Walk |
+| Q/E or mouse wheel | Zoom | — |
+| Arrow keys | Pan | — |
+| Hold right mouse + drag | Orbit | — |
+| Mouse movement | — | Look while captured |
+| Left Shift | — | Run |
+| Left click | — | Capture mouse after release/focus loss |
+| Escape | Quit gracefully | Release mouse; press again to return to strategy |
 
-Sunlit Baltic coasts; low coastal vegetation; characteristic Gotland limestone; warm timber and thatched roofs; atmospheric distance; painterly materials; richly populated meadows; carefully stylized, shallow seawater. Avoid generic fantasy imagery and anachronistic architecture.
+The first visit spawns at a safe meadow position. Later visits retain the walking position and look direction. Strategy focus, orbit angle and zoom survive first-person visits. Walking stays on the meadow and slides around the house and limestone footprint. Losing window focus releases the mouse; returning to the window requires a click to resume navigation. Releasing the mouse or changing camera mode does not pause simulation. Close the window to quit from either mode.
 
-## Roadmap
+## Shared simulation proof
 
-1. **First scene:** orbit camera, coast, sea, light and representative scale.
-2. **Art prototype:** terrain topology, foliage scattering, wind, water and stylized materials.
-3. **Gotland identity:** researched Viking Age farmsteads, stone monuments, boats and harbours.
-4. **World interaction:** placement of buildings and paths, animals and settlements.
-5. **Living world:** shipping, markets, seasons and everyday activity.
+One worker moves **six existing logs** from the supply pad at `(-5, -2.5)` to the stockpile at `(-2.5, 3.5)`. The worker walks to the supply, loads one log, carries it, unloads, and repeats until the finite supply is exhausted (roughly 75 simulation seconds). The carried log is taken from supply before appearing in storage: `supply + carried + stored = 6` throughout. The same six log entities change position; camera switching never spawns replacement workers/logs or resets stocks/tasks. The HUD exposes simulation time, worker entity ID, task, carried state and both stocks in either view.
 
-## Development with Codex
+This is a deterministic transport proof, not tree harvesting, player orders, construction, a complete economy or saved games. Simulation persists between modes during a session; restarting the app resets it. Those next steps belong to later PRs in issue #1.
 
-See [AGENTS.md](AGENTS.md) for project constraints, implementation conventions and the first suggested assignment.
+## Architecture
 
-## License
+- `world.rs`: the existing coastal scene, shared meadow bounds and obstacle queries.
+- `camera.rs`: explicit camera-mode resource, independent strategy/first-person poses, collision-aware movement, focus and cursor policy. It never mutates simulation.
+- `simulation.rs`: fixed-step ECS worker/task state, finite stocks and simulation clock. Pure transport logic has no camera/rendering/input dependency.
+- `presentation.rs`: shared worker/log meshes and HUD reading simulation state in `Update`; no economy progression is performed here.
+- `main.rs`: plugin composition and window setup.
 
-License has not yet been selected. All rights reserved until the repository owner chooses one.
+`FixedUpdate` advances material flow regardless of camera mode. `Update` presents the current state. All geometry is original placeholder geometry; historical layouts, costumes and logistics timing are artistic/technical interpretations, not archaeological claims.
+
+## Validation
+
+```sh
+cargo fmt --check
+cargo check --locked
+cargo test --locked
+cargo clippy --locked -- -D warnings
+cargo build --locked
+```
+
+Tests cover material conservation, load-before-store ordering, finite task completion, equivalent elapsed time with different step sizes, worker identity/progress through repeated camera changes, exact restoration of strategy pose, retained visitor position, cursor release on focus loss/Escape, and house/rock/shore collision including large displacements.
+
+Linux software-Vulkan smoke captures: [strategy](docs/screenshots/milestone1-strategy.png) and [first person](docs/screenshots/milestone1-first-person.png). These demonstrate the same worker ID and continuing material flow, not a visual-quality or Apple Silicon performance benchmark.
+
+### Manual smoke test (macOS or Linux desktop)
+
+1. Start the app in strategy mode. Orbit, pan and zoom to a distinctive view. Note the HUD's worker ID, supply and simulation time.
+2. Watch the worker collect a log (about six seconds). Verify supply decreases while carrying, and storage increases only after unloading.
+3. Press Tab during transport. Verify the same worker ID/task/stocks and advancing simulation time. Walk with WASD and look with the mouse. Follow the worker between the two pads.
+4. Press Escape: the cursor becomes visible and walking/look stop while the worker continues. Click to capture it again. Switch to another app and back; the pointer must be free until clicked.
+5. Press Tab: the exact earlier strategy view returns. Repeat switching during loading, walking and unloading; neither stocks nor the task restart.
+6. Try walking into the house, limestone block and sea. Movement should slide or stop at the boundary. Diagonal walking should not be faster.
+7. After roughly 75 simulation seconds, all six logs must be at the stockpile and the worker must stop. Switch modes again: the count remains six. Quit with Escape from strategy or by closing the window.
+
+## Direction and license
+
+Future work: resource orders and construction, Gotland visual refinement, farming/households, seasons, barter and Baltic shipping. Follow [AGENTS.md](AGENTS.md) and the scoped PR sequence in issue #1. Do not copy proprietary game assets or claim historical certainty without evidence.
+
+A project license has not yet been selected. All rights reserved until the repository owner chooses one.

@@ -7,3 +7,10 @@ publish = false
 
 [dependencies]
 bevy = "0.20"
+
+# Keep native debug builds practical on desktop and cloud hosts.
+[profile.dev]
+debug = 0
+
+[profile.dev.package.hafthi_world]
+opt-level = 1
