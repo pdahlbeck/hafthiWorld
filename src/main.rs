@@ -1,5 +1,6 @@
 //! One world and simulation, observed through two camera modes.
 mod camera;
+mod orders;
 mod presentation;
 mod simulation;
 mod world;
@@ -20,6 +21,7 @@ fn main() {
             world::WorldPlugin,
             simulation::SimulationPlugin,
             camera::CameraPlugin,
+            orders::OrdersPlugin,
             presentation::PresentationPlugin,
         ))
         .run();
