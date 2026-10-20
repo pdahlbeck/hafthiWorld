@@ -1,23 +1,53 @@
-//! Visible proof of shared entities. Presentation reads, but never advances, logistics.
+//! Persistent scene entities read shared state; rendering never advances logistics.
 use crate::{
-    camera::{CameraInput, CameraMode, CameraRig},
-    simulation::{INITIAL_LOGS, STOCKPILE, SUPPLY, SimulationClock, Stocks, Worker},
+    camera::{CameraMode, CameraRig},
+    orders::{OrderButton, OrderInput, OrderState},
+    simulation::{
+        BUILD_COST, BUILD_SITE, LogLocation, STOCKPILE, Settlement, SimulationClock, TOTAL_LOGS,
+        TREE_POSITIONS, Task, Worker, ground_log_position,
+    },
 };
-use bevy::prelude::*;
+use bevy::{
+    picking::hover::Hovered,
+    prelude::*,
+    ui::Pressed,
+    ui_widgets::{ActivateOnPress, Button},
+};
 
 pub struct PresentationPlugin;
 impl Plugin for PresentationPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup)
-            .add_systems(Update, (sync_worker, sync_logs, hud).after(CameraInput));
+        app.add_systems(Startup, setup).add_systems(
+            Update,
+            (
+                sync_worker,
+                sync_logs,
+                sync_trees,
+                sync_construction,
+                sync_selection,
+                sync_buttons,
+                hud,
+            )
+                .after(OrderInput),
+        );
     }
 }
 #[derive(Component)]
 struct WorkerVisual;
 #[derive(Component)]
-struct LogVisual(u32);
+struct AxeVisual;
+#[derive(Component)]
+struct LogVisual(usize);
+#[derive(Component)]
+struct TreeVisual(usize);
+#[derive(Component)]
+struct ConstructionVisual(usize);
+#[derive(Component)]
+struct SelectionVisual;
 #[derive(Component)]
 struct StatusText;
+#[derive(Component)]
+struct OrderPanel;
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -25,6 +55,17 @@ fn setup(
 ) {
     let wool = materials.add(Color::srgb(0.23, 0.31, 0.21));
     let skin = materials.add(Color::srgb(0.65, 0.43, 0.30));
+    let wood = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.45, 0.27, 0.13),
+        perceptual_roughness: 0.9,
+        ..default()
+    });
+    let steel = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.32, 0.34, 0.33),
+        metallic: 0.7,
+        perceptual_roughness: 0.6,
+        ..default()
+    });
     commands
         .spawn((
             Mesh3d(meshes.add(Cuboid::new(0.48, 1.2, 0.35))),
@@ -38,31 +79,97 @@ fn setup(
                 MeshMaterial3d(skin),
                 Transform::from_xyz(0.0, 0.78, 0.0),
             ));
+            p.spawn((
+                Transform::from_xyz(0.34, 0.3, 0.1),
+                Visibility::default(),
+                AxeVisual,
+            ))
+            .with_children(|axe| {
+                axe.spawn((
+                    Mesh3d(meshes.add(Cuboid::new(0.035, 0.45, 0.035))),
+                    MeshMaterial3d(wood.clone()),
+                    Transform::default(),
+                ));
+                axe.spawn((
+                    Mesh3d(meshes.add(Cuboid::new(0.19, 0.12, 0.06))),
+                    MeshMaterial3d(steel),
+                    Transform::from_xyz(0.07, 0.20, 0.0),
+                ));
+            });
         });
+    let leaf = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.20, 0.37, 0.16),
+        perceptual_roughness: 1.0,
+        ..default()
+    });
+    let trunk = meshes.add(Cylinder::new(0.12, 1.8));
+    let crown = meshes.add(Sphere::new(0.85));
+    let stump = meshes.add(Cylinder::new(0.14, 0.30));
+    for (i, p) in TREE_POSITIONS.iter().enumerate() {
+        commands
+            .spawn((
+                Mesh3d(trunk.clone()),
+                MeshMaterial3d(wood.clone()),
+                Transform::from_xyz(p.x, 1.1, p.y),
+                TreeVisual(i),
+            ))
+            .with_children(|parent| {
+                parent.spawn((
+                    Mesh3d(crown.clone()),
+                    MeshMaterial3d(leaf.clone()),
+                    Transform::from_xyz(0.0, 1.15, 0.0),
+                ));
+            });
+        commands.spawn((
+            Mesh3d(stump.clone()),
+            MeshMaterial3d(wood.clone()),
+            Transform::from_xyz(p.x, 0.35, p.y),
+        ));
+    }
     let log = meshes.add(Cylinder::new(0.12, 0.85));
-    let wood = materials.add(Color::srgb(0.45, 0.27, 0.13));
-    for id in 0..INITIAL_LOGS {
+    for i in 0..TOTAL_LOGS {
         commands.spawn((
             Mesh3d(log.clone()),
             MeshMaterial3d(wood.clone()),
             Transform::default(),
-            LogVisual(id),
+            Visibility::Hidden,
+            LogVisual(i),
         ));
     }
-    // Low marker pads identify endpoints without expanding the art scope.
+    let gold = materials.add(Color::srgb(0.82, 0.65, 0.24));
+    commands.spawn((
+        Mesh3d(meshes.add(Cylinder::new(0.55, 0.025))),
+        MeshMaterial3d(gold),
+        Transform::default(),
+        SelectionVisual,
+    ));
     let pad = meshes.add(Cuboid::new(1.7, 0.06, 1.0));
     let stone = materials.add(Color::srgb(0.64, 0.62, 0.53));
-    for p in [SUPPLY, STOCKPILE] {
+    for p in [STOCKPILE, BUILD_SITE] {
         commands.spawn((
             Mesh3d(pad.clone()),
             MeshMaterial3d(stone.clone()),
             Transform::from_xyz(p.x, 0.23, p.y),
         ));
     }
+    let parts = [
+        (Vec3::new(-0.58, 0.85, 0.0), Vec3::new(0.15, 1.2, 0.15)),
+        (Vec3::new(0.58, 0.85, 0.0), Vec3::new(0.15, 1.2, 0.15)),
+        (Vec3::new(0.0, 1.48, 0.0), Vec3::new(1.45, 0.15, 0.22)),
+    ];
+    for (i, (offset, size)) in parts.into_iter().enumerate() {
+        commands.spawn((
+            Mesh3d(meshes.add(Cuboid::from_size(size))),
+            MeshMaterial3d(wood.clone()),
+            Transform::from_translation(Vec3::new(BUILD_SITE.x, 0.0, BUILD_SITE.y) + offset),
+            Visibility::Hidden,
+            ConstructionVisual(i),
+        ));
+    }
     commands.spawn((
         Text::new(""),
         TextFont {
-            font_size: px(17.0).into(),
+            font_size: px(16.0).into(),
             ..default()
         },
         TextColor(Color::srgb(0.98, 0.96, 0.85)),
@@ -75,73 +182,295 @@ fn setup(
         },
         StatusText,
     ));
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(20),
+                bottom: px(12),
+                height: px(52),
+                column_gap: px(8),
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            OrderPanel,
+        ))
+        .with_children(|panel| {
+            for (label, order) in [
+                ("1: Tree 1", OrderButton::Select(0)),
+                ("2: Tree 2", OrderButton::Select(1)),
+                ("3: Tree 3", OrderButton::Select(2)),
+                ("F: Harvest", OrderButton::Harvest),
+                ("B: Build rack (2 logs)", OrderButton::Build),
+            ] {
+                panel
+                    .spawn((
+                        Button,
+                        ActivateOnPress,
+                        Hovered::default(),
+                        order,
+                        Node {
+                            height: px(44),
+                            padding: UiRect::horizontal(px(14)),
+                            align_items: AlignItems::Center,
+                            justify_content: JustifyContent::Center,
+                            ..default()
+                        },
+                        BackgroundColor(Color::srgb(0.22, 0.19, 0.14)),
+                    ))
+                    .with_children(|p| {
+                        p.spawn((
+                            Text::new(label),
+                            TextFont {
+                                font_size: px(16.0).into(),
+                                ..default()
+                            },
+                            TextColor(Color::srgb(0.98, 0.96, 0.85)),
+                        ));
+                    });
+            }
+        });
 }
-fn sync_worker(workers: Query<&Worker>, mut visuals: Query<&mut Transform, With<WorkerVisual>>) {
-    let Ok(worker) = workers.single() else {
+fn sync_worker(
+    workers: Query<&Worker>,
+    clock: Res<SimulationClock>,
+    mut visuals: Query<&mut Transform, With<WorkerVisual>>,
+    mut axes: Query<&mut Transform, (With<AxeVisual>, Without<WorkerVisual>)>,
+) {
+    let Ok(w) = workers.single() else {
         return;
     };
     for mut t in &mut visuals {
-        t.translation = Vec3::new(worker.position.x, 0.9, worker.position.y);
+        let previous = Vec2::new(t.translation.x, t.translation.z);
+        let direction = w.position - previous;
+        if direction.length_squared() > 0.00001 {
+            t.rotation = Quat::from_rotation_y(direction.x.atan2(direction.y));
+        }
+        t.translation = Vec3::new(w.position.x, 0.9, w.position.y);
+    }
+    for mut axe in &mut axes {
+        axe.rotation = Quat::from_rotation_z(if w.task == Task::Felling {
+            (clock.0 as f32 * 9.0).sin() * 0.8
+        } else {
+            0.0
+        });
     }
 }
 fn sync_logs(
-    stocks: Res<Stocks>,
+    settlement: Res<Settlement>,
     workers: Query<&Worker>,
-    mut logs: Query<(&LogVisual, &mut Transform)>,
+    mut logs: Query<(&LogVisual, &mut Transform, &mut Visibility)>,
 ) {
     let Ok(worker) = workers.single() else {
         return;
     };
-    for (log, mut t) in &mut logs {
-        let carried = worker.carrying && log.0 == stocks.stored;
-        t.translation = if log.0 < stocks.stored {
-            Vec3::new(
-                STOCKPILE.x + (log.0 % 3) as f32 * 0.40 - 0.4,
-                0.43 + (log.0 / 3) as f32 * 0.23,
-                STOCKPILE.y,
-            )
-        } else if carried {
-            Vec3::new(worker.position.x, 1.15, worker.position.y + 0.32)
+    for (log, mut t, mut visibility) in &mut logs {
+        let state = settlement.logs[log.0];
+        *visibility = if matches!(state, LogLocation::InTree | LogLocation::Installed) {
+            Visibility::Hidden
         } else {
-            let i = log.0 - stocks.stored - u32::from(worker.carrying);
-            Vec3::new(
-                SUPPLY.x + (i % 3) as f32 * 0.40 - 0.4,
-                0.43 + (i / 3) as f32 * 0.23,
-                SUPPLY.y,
-            )
+            Visibility::Inherited
         };
-        t.rotation = if carried {
+        t.translation = match state {
+            LogLocation::Ground => {
+                let p = ground_log_position(log.0);
+                Vec3::new(p.x, 0.38, p.y)
+            }
+            LogLocation::Carried => Vec3::new(worker.position.x, 1.15, worker.position.y + 0.32),
+            LogLocation::Stored => {
+                let slot = log.0;
+                Vec3::new(
+                    STOCKPILE.x + (slot % 3) as f32 * 0.4 - 0.4,
+                    0.43 + (slot / 3) as f32 * 0.23,
+                    STOCKPILE.y,
+                )
+            }
+            _ => Vec3::ZERO,
+        };
+        t.rotation = if state == LogLocation::Carried {
             Quat::from_rotation_z(std::f32::consts::FRAC_PI_2)
         } else {
             Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)
         };
     }
 }
+fn sync_trees(settlement: Res<Settlement>, mut trees: Query<(&TreeVisual, &mut Visibility)>) {
+    for (tree, mut v) in &mut trees {
+        *v = if settlement.trees[tree.0].felled {
+            Visibility::Hidden
+        } else {
+            Visibility::Inherited
+        };
+    }
+}
+fn sync_construction(
+    settlement: Res<Settlement>,
+    mut parts: Query<(&ConstructionVisual, &mut Visibility)>,
+) {
+    for (part, mut v) in &mut parts {
+        *v = if (part.0 < BUILD_COST && settlement.installed() > part.0)
+            || settlement.construction.complete
+        {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+    }
+}
+fn sync_selection(
+    orders: Res<OrderState>,
+    mut visual: Query<&mut Transform, With<SelectionVisual>>,
+) {
+    let p = TREE_POSITIONS[orders.selected];
+    for mut t in &mut visual {
+        t.translation = Vec3::new(p.x, 0.23, p.y);
+    }
+}
+fn sync_buttons(
+    orders: Res<OrderState>,
+    rig: Res<CameraRig>,
+    mut panels: Query<&mut Node, With<OrderPanel>>,
+    mut buttons: Query<(&OrderButton, &Hovered, Has<Pressed>, &mut BackgroundColor)>,
+) {
+    for mut node in &mut panels {
+        node.display = if rig.mode == CameraMode::Strategy {
+            Display::Flex
+        } else {
+            Display::None
+        };
+    }
+    for (action, hovered, pressed, mut color) in &mut buttons {
+        let selected = matches!(action,OrderButton::Select(i) if *i==orders.selected);
+        *color = BackgroundColor(if pressed {
+            Color::srgb(0.5, 0.37, 0.16)
+        } else if hovered.get() || selected {
+            Color::srgb(0.36, 0.30, 0.17)
+        } else {
+            Color::srgb(0.22, 0.19, 0.14)
+        });
+    }
+}
 fn hud(
     rig: Res<CameraRig>,
-    stocks: Res<Stocks>,
+    s: Res<Settlement>,
+    orders: Res<OrderState>,
     clock: Res<SimulationClock>,
-    worker: Query<(Entity, &Worker)>,
+    workers: Query<(Entity, &Worker)>,
     mut texts: Query<&mut Text, With<StatusText>>,
 ) {
-    let Ok((id, w)) = worker.single() else {
+    let Ok((id, w)) = workers.single() else {
         return;
     };
-    let mode = match rig.mode {
-        CameraMode::Strategy => "STRATEGY",
-        CameraMode::FirstPerson => "FIRST PERSON",
+    let mode = if rig.mode == CameraMode::Strategy {
+        "STRATEGY"
+    } else {
+        "FIRST PERSON"
+    };
+    let tree = &s.trees[orders.selected];
+    let tree_status = if tree.felled {
+        "felled"
+    } else if tree.ordered {
+        "ordered"
+    } else {
+        "standing"
+    };
+    let build = if s.construction.complete {
+        "complete"
+    } else if s.installed() == BUILD_COST {
+        "assembling"
+    } else if s.construction.ordered {
+        "waiting for delivered timber"
+    } else {
+        "not ordered"
     };
     let controls = if rig.mode == CameraMode::Strategy {
-        "WASD orbit | Q/E or wheel zoom | Arrows pan | Tab walk | Esc quit"
+        "WASD orbit | Q/E zoom | Arrows pan | Click tree / 1-3 select | F harvest | B build | Tab walk | Esc quit"
     } else if rig.captured {
-        "WASD walk | Shift run | Mouse look | Tab strategy | Esc release mouse"
+        "WASD walk | Mouse look | 1-3 select | F harvest | B build | Tab strategy | Esc release mouse"
     } else {
         "Click to capture mouse | Tab / Esc strategy (simulation keeps running)"
     };
     for mut text in &mut texts {
         *text = Text::new(format!(
-            "hafthiWorld | {mode} | Simulation {:0.1}s\nWorker {id:?}: {:?} | Carrying: {}\nSupply: {} | Stockpile: {} / {INITIAL_LOGS}\n{controls}",
-            clock.0, w.task, w.carrying, stocks.supply, stocks.stored
+            "hafthiWorld | {mode} | Simulation {:.1}s\nWorker {id:?}: {:?} | Carrying: {} | Tree {}: {tree_status}\nLogs: in trees {} | ground {} | carried {} | stored {} | installed {}/{}\nTimber rack: {build}\n{}\n{controls}",
+            clock.0,
+            w.task,
+            w.carrying.is_some(),
+            orders.selected + 1,
+            s.count(LogLocation::InTree),
+            s.count(LogLocation::Ground),
+            s.count(LogLocation::Carried),
+            s.stored(),
+            s.installed(),
+            BUILD_COST,
+            orders.feedback
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn scene_keeps_the_same_worker_tree_and_log_entities_through_harvest_and_build() {
+        use bevy::time::TimeUpdateStrategy;
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(TimeUpdateStrategy::ManualDuration(
+                std::time::Duration::from_millis(100),
+            ))
+            .init_resource::<Assets<Mesh>>()
+            .init_resource::<Assets<StandardMaterial>>()
+            .init_resource::<CameraRig>()
+            .init_resource::<OrderState>()
+            .add_plugins((crate::simulation::SimulationPlugin, PresentationPlugin));
+        app.update();
+        let log_ids: Vec<_> = app
+            .world_mut()
+            .query_filtered::<Entity, With<LogVisual>>()
+            .iter(app.world())
+            .collect();
+        let tree_ids: Vec<_> = app
+            .world_mut()
+            .query_filtered::<Entity, With<TreeVisual>>()
+            .iter(app.world())
+            .collect();
+        let worker = app
+            .world_mut()
+            .query_filtered::<Entity, With<WorkerVisual>>()
+            .single(app.world())
+            .unwrap();
+        assert_eq!(log_ids.len(), TOTAL_LOGS);
+        assert!(
+            log_ids
+                .iter()
+                .all(|&id| *app.world().get::<Visibility>(id).unwrap() == Visibility::Hidden)
+        );
+        {
+            let mut s = app.world_mut().resource_mut::<Settlement>();
+            s.request_harvest(0);
+            s.request_build();
+        }
+        for frame in 0..900 {
+            if frame % 9 == 0 {
+                app.world_mut().resource_mut::<CameraRig>().toggle();
+            }
+            app.update();
+        }
+        assert!(app.world().resource::<Settlement>().construction.complete);
+        assert!(app.world().get::<WorkerVisual>(worker).is_some());
+        for id in log_ids {
+            assert!(app.world().get::<LogVisual>(id).is_some());
+        }
+        for id in tree_ids {
+            assert!(app.world().get::<TreeVisual>(id).is_some());
+        }
+        let completed_parts = app
+            .world_mut()
+            .query::<(&ConstructionVisual, &Visibility)>()
+            .iter(app.world())
+            .filter(|(_, v)| **v != Visibility::Hidden)
+            .count();
+        assert_eq!(completed_parts, 3);
     }
 }
