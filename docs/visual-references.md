@@ -20,3 +20,8 @@ The roadmap's sheep-to-wool chain is represented by two generic stylized animals
 ## First household supply slice
 
 Home 1 is a single abstract ownership/demand unit attached to the existing worker and house, not a reconstruction of a named Gotland family, household size or land tenure system. The visible door-side pantry rack is a game affordance, not a documented Viking Age storage practice. Grain-to-ration conversion bypasses processing and does not claim that raw grain was eaten as a complete diet. Four grain units, forty-second ration intervals, delayed clock start and shortage counters are technical rules. No family population, nutrition, cooking, starvation deaths, seasons or additional household autonomy is asserted.
+
+
+## Seed reservation and repeat crops
+
+The one-sack-to-four-seed-units conversion, four-second sorting task, standing reservation priority, reusable sack slots and repeatable thirty-second crop growth are technical game abstractions. They are not measurements of medieval seed ratios, harvest frequency, agricultural labor or a Gotlandic seasonal calendar. The current scene does not depict threshing, drying, winnowing or seed selection in detail; the preparation task stands in for that future processing chain. No additional archaeological or botanical claim is introduced.

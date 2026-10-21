@@ -41,6 +41,7 @@ pub enum OrderButton {
     Reap,
     Shear,
     SupplyHome,
+    ReserveSeed,
 }
 fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
     match order {
@@ -57,6 +58,13 @@ fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
                 }
             } else {
                 "This tree is already ordered or felled."
+            };
+        }
+        OrderButton::ReserveSeed => {
+            ui.feedback = if settlement.farm.request_reserve() {
+                "Seed saving ordered: one stored sack per harvest becomes the next seed batch, before food supply."
+            } else {
+                "Seed saving is already ordered. It waits for a stored sack from each harvest."
             };
         }
         OrderButton::SupplyHome => {
@@ -77,14 +85,14 @@ fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
             ui.feedback = if settlement.farm.request_sow() {
                 "Sowing ordered. Worker collects four seed units and sows the field."
             } else {
-                "This field is already ordered, planted or spent; no new seeds were charged."
+                "Need stored seeds and an unplanted or harvested field. V saves a stored sack for the next sowing."
             };
         }
         OrderButton::Reap => {
             ui.feedback = if settlement.farm.request_reap() {
                 "Reaping ordered. Worker cuts the ripe crop, then carries each sack to storage."
             } else {
-                "Crop must be ripe and not already ordered. Wait for growth, then press R."
+                "Need a ripe crop and all previous grain used or saved. Wait, then press R again."
             };
         }
         OrderButton::Build => {
@@ -182,6 +190,9 @@ fn issue_orders(
     if input.keys.just_pressed(KeyCode::KeyB) {
         apply(OrderButton::Build, &mut ui, &mut settlement);
     }
+    if input.keys.just_pressed(KeyCode::KeyV) {
+        apply(OrderButton::ReserveSeed, &mut ui, &mut settlement);
+    }
     if input.keys.just_pressed(KeyCode::KeyH) {
         apply(OrderButton::SupplyHome, &mut ui, &mut settlement);
     }
@@ -217,6 +228,10 @@ mod tests {
                 PrimaryWindow,
             ))
             .id();
+        let reserve = app.world_mut().spawn(OrderButton::ReserveSeed).id();
+        app.world_mut().trigger(Activate { entity: reserve });
+        app.update();
+        assert!(app.world().resource::<Settlement>().farm.reserve_ordered);
         let supply = app.world_mut().spawn(OrderButton::SupplyHome).id();
         app.world_mut().trigger(Activate { entity: supply });
         app.update();
@@ -282,6 +297,16 @@ mod tests {
             app.update();
             assert_eq!(
                 app.world().resource::<Settlement>().farm.harvest_ordered,
+                allowed
+            );
+            {
+                let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+                keys.reset_all();
+                keys.press(KeyCode::KeyV);
+            }
+            app.update();
+            assert_eq!(
+                app.world().resource::<Settlement>().farm.reserve_ordered,
                 allowed
             );
             app.world_mut().resource_mut::<Settlement>().household =
