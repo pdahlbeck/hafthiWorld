@@ -1,6 +1,7 @@
 //! Persistent scene entities read shared state; rendering never advances logistics.
 use crate::{
     camera::{CameraMode, CameraRig},
+    farming::{GrainLocation, SEED_UNITS, SeedLocation},
     orders::{OrderButton, OrderInput, OrderState},
     simulation::{
         BUILD_COST, BUILD_SITE, LogLocation, STOCKPILE, Settlement, SimulationClock, TOTAL_LOGS,
@@ -202,6 +203,8 @@ fn setup(
                 ("3: Tree 3", OrderButton::Select(2)),
                 ("F: Harvest", OrderButton::Harvest),
                 ("B: Build rack (2 logs)", OrderButton::Build),
+                ("O: Sow field", OrderButton::Sow),
+                ("R: Reap crop", OrderButton::Reap),
             ] {
                 panel
                     .spawn((
@@ -231,11 +234,17 @@ fn setup(
             }
         });
 }
+type AxeTransforms<'w, 's> = Query<
+    'w,
+    's,
+    (&'static mut Transform, &'static mut Visibility),
+    (With<AxeVisual>, Without<WorkerVisual>),
+>;
 fn sync_worker(
     workers: Query<&Worker>,
     clock: Res<SimulationClock>,
     mut visuals: Query<&mut Transform, With<WorkerVisual>>,
-    mut axes: Query<&mut Transform, (With<AxeVisual>, Without<WorkerVisual>)>,
+    mut axes: AxeTransforms,
 ) {
     let Ok(w) = workers.single() else {
         return;
@@ -248,7 +257,23 @@ fn sync_worker(
         }
         t.translation = Vec3::new(w.position.x, 0.9, w.position.y);
     }
-    for mut axe in &mut axes {
+    for (mut axe, mut visible) in &mut axes {
+        *visible = if matches!(
+            w.task,
+            Task::ToFarmGateway
+                | Task::LoadingSeeds
+                | Task::ToField
+                | Task::Sowing
+                | Task::Reaping
+                | Task::LoadingGrain
+                | Task::DeliveringGrain
+                | Task::StoringGrain
+                | Task::FromField
+        ) {
+            Visibility::Hidden
+        } else {
+            Visibility::Visible
+        };
         axe.rotation = Quat::from_rotation_z(if w.task == Task::Felling {
             (clock.0 as f32 * 9.0).sin() * 0.8
         } else {
@@ -384,15 +409,15 @@ fn hud(
         "not ordered"
     };
     let controls = if rig.mode == CameraMode::Strategy {
-        "WASD orbit | Q/E zoom | Arrows pan | Click tree / 1-3 select | F harvest | B build | Tab walk | Esc quit"
+        "WASD orbit | Q/E zoom | Arrows pan | Click tree / 1-3 select | F harvest | B build | O sow | R reap | Tab walk | Esc quit"
     } else if rig.captured {
-        "WASD walk | Mouse look | 1-3 select | F harvest | B build | Tab strategy | Esc release mouse"
+        "WASD walk | Mouse look | 1-3 select | F harvest | B build | O sow | R reap | Tab strategy | Esc release mouse"
     } else {
         "Click to capture mouse | Tab / Esc strategy (simulation keeps running)"
     };
     for mut text in &mut texts {
         *text = Text::new(format!(
-            "hafthiWorld | {mode} | Simulation {:.1}s\nWorker {id:?}: {:?} | Carrying: {} | Tree {}: {tree_status}\nLogs: in trees {} | ground {} | carried {} | stored {} | installed {}/{}\nTimber rack: {build}\n{}\n{controls}",
+            "hafthiWorld | {mode} | Simulation {:.1}s\nWorker {id:?}: {:?} | Carrying log: {} | Tree {}: {tree_status}\nLogs: in trees {} | ground {} | carried {} | stored {} | installed {}/{}\nTimber rack: {build}\nCrop: {} {:.0}% | seeds stored {} / carried {} / used {}\nGrain: field {} | carried {} | stored {}\n{}\n{controls}",
             clock.0,
             w.task,
             w.carrying.is_some(),
@@ -403,6 +428,26 @@ fn hud(
             s.stored(),
             s.installed(),
             BUILD_COST,
+            s.farm.phase.label(),
+            s.farm.progress() * 100.0,
+            if s.farm.seeds == SeedLocation::Stored {
+                SEED_UNITS
+            } else {
+                0
+            },
+            if s.farm.seeds == SeedLocation::Carried {
+                SEED_UNITS
+            } else {
+                0
+            },
+            if s.farm.seeds == SeedLocation::Sown {
+                SEED_UNITS
+            } else {
+                0
+            },
+            s.farm.count(GrainLocation::Ground),
+            s.farm.count(GrainLocation::Carried),
+            s.farm.count(GrainLocation::Stored),
             orders.feedback
         ));
     }

@@ -332,7 +332,11 @@ fn spawn_grass(
         let x = (noise(i * 3) - 0.5) * 16.8;
         let z = (noise(i * 3 + 1) - 0.5) * 11.8;
         // Keep house, work sites and the south stockpile approach visually clear.
-        if !walkable(Vec2::new(x, z)) || (x < -1.0 && z > 0.0) {
+        let field = crate::farming::FIELD_CENTER;
+        if !walkable(Vec2::new(x, z))
+            || (x < -1.0 && z > 0.0)
+            || ((x - field.x).abs() < 2.1 && (z - field.y).abs() < 1.5)
+        {
             continue;
         }
         commands.spawn((

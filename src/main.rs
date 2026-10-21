@@ -1,5 +1,6 @@
 //! One world and simulation, observed through two camera modes.
 mod camera;
+mod farming;
 mod orders;
 mod performance;
 mod presentation;
@@ -48,6 +49,7 @@ fn main() -> AppExit {
             camera::CameraPlugin,
             orders::OrdersPlugin,
             presentation::PresentationPlugin,
+            farming::FarmingPlugin,
             performance::PerformancePlugin,
         ))
         .run()

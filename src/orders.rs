@@ -34,6 +34,8 @@ pub enum OrderButton {
     Select(usize),
     Harvest,
     Build,
+    Sow,
+    Reap,
 }
 fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
     match order {
@@ -50,6 +52,20 @@ fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
                 }
             } else {
                 "This tree is already ordered or felled."
+            };
+        }
+        OrderButton::Sow => {
+            ui.feedback = if settlement.farm.request_sow() {
+                "Sowing ordered. Worker collects four seed units and sows the field."
+            } else {
+                "This field is already ordered, planted or spent; no new seeds were charged."
+            };
+        }
+        OrderButton::Reap => {
+            ui.feedback = if settlement.farm.request_reap() {
+                "Reaping ordered. Worker cuts the ripe crop, then carries each sack to storage."
+            } else {
+                "Crop must be ripe and not already ordered. Wait for growth, then press R."
             };
         }
         OrderButton::Build => {
@@ -147,10 +163,84 @@ fn issue_orders(
     if input.keys.just_pressed(KeyCode::KeyB) {
         apply(OrderButton::Build, &mut ui, &mut settlement);
     }
+    if input.keys.just_pressed(KeyCode::KeyO) {
+        apply(OrderButton::Sow, &mut ui, &mut settlement);
+    }
+    if input.keys.just_pressed(KeyCode::KeyR) {
+        apply(OrderButton::Reap, &mut ui, &mut settlement);
+    }
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn crop_buttons_and_keys_obey_the_same_mode_and_focus_guards() {
+        use crate::farming::{CropPhase, Farm};
+        let mut app = App::new();
+        app.init_resource::<Settlement>()
+            .init_resource::<CameraRig>()
+            .init_resource::<ButtonInput<KeyCode>>()
+            .init_resource::<ButtonInput<MouseButton>>()
+            .add_plugins(OrdersPlugin);
+        let window = app
+            .world_mut()
+            .spawn((
+                Window {
+                    focused: true,
+                    ..default()
+                },
+                PrimaryWindow,
+            ))
+            .id();
+        let sow = app.world_mut().spawn(OrderButton::Sow).id();
+        let reap = app.world_mut().spawn(OrderButton::Reap).id();
+        app.world_mut().trigger(Activate { entity: sow });
+        app.update();
+        assert_eq!(
+            app.world().resource::<Settlement>().farm.phase,
+            CropPhase::SowOrdered
+        );
+        app.world_mut().resource_mut::<Settlement>().farm.phase = CropPhase::Ripe;
+        app.world_mut().trigger(Activate { entity: reap });
+        app.update();
+        assert!(app.world().resource::<Settlement>().farm.harvest_ordered);
+        for (mode, focused, captured, allowed) in [
+            (CameraMode::Strategy, true, false, true),
+            (CameraMode::FirstPerson, true, true, true),
+            (CameraMode::FirstPerson, true, false, false),
+            (CameraMode::Strategy, false, false, false),
+            (CameraMode::FirstPerson, false, true, false),
+        ] {
+            {
+                let mut rig = app.world_mut().resource_mut::<CameraRig>();
+                rig.mode = mode;
+                rig.captured = captured;
+            }
+            app.world_mut().get_mut::<Window>(window).unwrap().focused = focused;
+            app.world_mut().resource_mut::<Settlement>().farm = Farm::default();
+            {
+                let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+                keys.reset_all();
+                keys.press(KeyCode::KeyO);
+            }
+            app.update();
+            assert_eq!(
+                app.world().resource::<Settlement>().farm.phase == CropPhase::SowOrdered,
+                allowed
+            );
+            app.world_mut().resource_mut::<Settlement>().farm.phase = CropPhase::Ripe;
+            {
+                let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+                keys.reset_all();
+                keys.press(KeyCode::KeyR);
+            }
+            app.update();
+            assert_eq!(
+                app.world().resource::<Settlement>().farm.harvest_ordered,
+                allowed
+            );
+        }
+    }
     #[test]
     fn ray_selects_visible_tree_and_misses_empty_space() {
         let s = Settlement::default();
