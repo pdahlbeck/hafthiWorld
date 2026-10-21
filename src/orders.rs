@@ -36,6 +36,7 @@ pub enum OrderButton {
     Build,
     Sow,
     Reap,
+    Shear,
 }
 fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
     match order {
@@ -52,6 +53,13 @@ fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
                 }
             } else {
                 "This tree is already ordered or felled."
+            };
+        }
+        OrderButton::Shear => {
+            ui.feedback = if settlement.flock.request_shear() {
+                "Shearing ordered. Sheep hold still; the worker clips and stores each wool bundle."
+            } else {
+                "All sheep are already ordered or shorn. This slice has one fleece per sheep."
             };
         }
         OrderButton::Sow => {
@@ -163,6 +171,9 @@ fn issue_orders(
     if input.keys.just_pressed(KeyCode::KeyB) {
         apply(OrderButton::Build, &mut ui, &mut settlement);
     }
+    if input.keys.just_pressed(KeyCode::KeyC) {
+        apply(OrderButton::Shear, &mut ui, &mut settlement);
+    }
     if input.keys.just_pressed(KeyCode::KeyO) {
         apply(OrderButton::Sow, &mut ui, &mut settlement);
     }
@@ -174,7 +185,7 @@ fn issue_orders(
 mod tests {
     use super::*;
     #[test]
-    fn crop_buttons_and_keys_obey_the_same_mode_and_focus_guards() {
+    fn farm_and_sheep_orders_obey_the_same_mode_and_focus_guards() {
         use crate::farming::{CropPhase, Farm};
         let mut app = App::new();
         app.init_resource::<Settlement>()
@@ -192,6 +203,17 @@ mod tests {
                 PrimaryWindow,
             ))
             .id();
+        let shear = app.world_mut().spawn(OrderButton::Shear).id();
+        app.world_mut().trigger(Activate { entity: shear });
+        app.update();
+        assert!(
+            app.world()
+                .resource::<Settlement>()
+                .flock
+                .sheep
+                .iter()
+                .all(|s| s.ordered)
+        );
         let sow = app.world_mut().spawn(OrderButton::Sow).id();
         let reap = app.world_mut().spawn(OrderButton::Reap).id();
         app.world_mut().trigger(Activate { entity: sow });
@@ -237,6 +259,22 @@ mod tests {
             app.update();
             assert_eq!(
                 app.world().resource::<Settlement>().farm.harvest_ordered,
+                allowed
+            );
+            app.world_mut().resource_mut::<Settlement>().flock = crate::livestock::Flock::default();
+            {
+                let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+                keys.reset_all();
+                keys.press(KeyCode::KeyC);
+            }
+            app.update();
+            assert_eq!(
+                app.world()
+                    .resource::<Settlement>()
+                    .flock
+                    .sheep
+                    .iter()
+                    .all(|s| s.ordered),
                 allowed
             );
         }

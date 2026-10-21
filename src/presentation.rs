@@ -2,6 +2,7 @@
 use crate::{
     camera::{CameraMode, CameraRig},
     farming::{GrainLocation, SEED_UNITS, SeedLocation},
+    livestock::{SHEEP_COUNT, WoolLocation},
     orders::{OrderButton, OrderInput, OrderState},
     simulation::{
         BUILD_COST, BUILD_SITE, LogLocation, STOCKPILE, Settlement, SimulationClock, TOTAL_LOGS,
@@ -178,6 +179,7 @@ fn setup(
         Node {
             position_type: PositionType::Absolute,
             left: px(20),
+            right: px(20),
             top: px(20),
             ..default()
         },
@@ -205,6 +207,7 @@ fn setup(
                 ("B: Build rack (2 logs)", OrderButton::Build),
                 ("O: Sow field", OrderButton::Sow),
                 ("R: Reap crop", OrderButton::Reap),
+                ("C: Shear sheep", OrderButton::Shear),
             ] {
                 panel
                     .spawn((
@@ -258,18 +261,19 @@ fn sync_worker(
         t.translation = Vec3::new(w.position.x, 0.9, w.position.y);
     }
     for (mut axe, mut visible) in &mut axes {
-        *visible = if matches!(
-            w.task,
-            Task::ToFarmGateway
-                | Task::LoadingSeeds
-                | Task::ToField
-                | Task::Sowing
-                | Task::Reaping
-                | Task::LoadingGrain
-                | Task::DeliveringGrain
-                | Task::StoringGrain
-                | Task::FromField
-        ) {
+        *visible = if w.task.tending_sheep()
+            || matches!(
+                w.task,
+                Task::ToFarmGateway
+                    | Task::LoadingSeeds
+                    | Task::ToField
+                    | Task::Sowing
+                    | Task::Reaping
+                    | Task::LoadingGrain
+                    | Task::DeliveringGrain
+                    | Task::StoringGrain
+                    | Task::FromField
+            ) {
             Visibility::Hidden
         } else {
             Visibility::Visible
@@ -409,15 +413,15 @@ fn hud(
         "not ordered"
     };
     let controls = if rig.mode == CameraMode::Strategy {
-        "WASD orbit | Q/E zoom | Arrows pan | Click tree / 1-3 select | F harvest | B build | O sow | R reap | Tab walk | Esc quit"
+        "WASD orbit | Q/E zoom | Arrows pan | Click tree / 1-3 select | F harvest | B build | O sow | R reap | C shear | Tab walk | Esc quit"
     } else if rig.captured {
-        "WASD walk | Mouse look | 1-3 select | F harvest | B build | O sow | R reap | Tab strategy | Esc release mouse"
+        "WASD walk | Mouse look | 1-3 select | F harvest | B build | O sow | R reap | C shear | Tab strategy | Esc release mouse"
     } else {
         "Click to capture mouse | Tab / Esc strategy (simulation keeps running)"
     };
     for mut text in &mut texts {
         *text = Text::new(format!(
-            "hafthiWorld | {mode} | Simulation {:.1}s\nWorker {id:?}: {:?} | Carrying log: {} | Tree {}: {tree_status}\nLogs: in trees {} | ground {} | carried {} | stored {} | installed {}/{}\nTimber rack: {build}\nCrop: {} {:.0}% | seeds stored {} / carried {} / used {}\nGrain: field {} | carried {} | stored {}\n{}\n{controls}",
+            "hafthiWorld | {mode} | Simulation {:.1}s\nWorker {id:?}: {:?} | Carrying log: {} | Tree {}: {tree_status}\nLogs: in trees {} | ground {} | carried {} | stored {} | installed {}/{}\nTimber rack: {build}\nCrop: {} {:.0}% | seeds stored {} / carried {} / used {}\nGrain: field {} | carried {} | stored {}\nSheep shorn {}/{} | Wool: fleece {} | ground {} | carried {} | stored {}\n{}\n{controls}",
             clock.0,
             w.task,
             w.carrying.is_some(),
@@ -448,6 +452,12 @@ fn hud(
             s.farm.count(GrainLocation::Ground),
             s.farm.count(GrainLocation::Carried),
             s.farm.count(GrainLocation::Stored),
+            s.flock.sheep.iter().filter(|s| s.shorn).count(),
+            SHEEP_COUNT,
+            s.flock.count(WoolLocation::Fleece),
+            s.flock.count(WoolLocation::Ground),
+            s.flock.count(WoolLocation::Carried),
+            s.flock.count(WoolLocation::Stored),
             orders.feedback
         ));
     }
