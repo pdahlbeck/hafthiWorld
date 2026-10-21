@@ -24,7 +24,7 @@ No compilation or other game process ran during sampling. Each case used a fresh
 ## Validation
 
 - `cargo fmt --check`, `cargo check --locked`, `cargo test --locked` (**15 passed**, zero ignored), `cargo clippy --locked -- -D warnings`, `cargo build --locked` and `cargo build --release --locked` passed.
-- Both camera modes render the new scene. Keyboard harvest/build orders still start the same worker's tasks across a camera switch. The existing simulation/presentation tests exercise the complete material chain and persistent entity identities; the graphical smoke is separate from those automated tests.
+- Both camera modes render the new scene. Keyboard harvest/build orders still start the same worker's tasks across a camera switch. A release graphical run also completed the rack (four units still in trees, two installed, none duplicated); T/Y paused and advanced the visible sky/sun through night while work continued. The existing simulation/presentation tests exercise the complete material chain and persistent entity identities; the graphical smoke is separate from those automated tests.
 - New tests cover rendered-shore and pine-trunk clearance, readable day/night sun brightness, argument validation, and slow-frame percentile handling. An actual invalid-duration launch returned exit 2; an actual unwritable CSV destination returned exit 1. All four timed runs returned success and produced samples.
 - Screenshots in `docs/screenshots/milestone3-*.png` document the scene and shared worker from both viewpoints. Development screenshot HUD timings are not the release benchmark data above. ALSA reports no sound device on this cloud host; audio hardware was not tested.
 

@@ -2,7 +2,7 @@ Implements the scoped **PR 3 visual pass and performance instrumentation** from 
 
 Low/high quality settings, an F3 wall-frame panel and a timed release CSV benchmark make the small scene measurable. `scripts/benchmark.sh` runs both cameras and tiers, with warmup, fixed lighting, repeat controls and failure propagation. Historical sources and artistic interpretations are recorded separately; no dependencies or third-party assets are added.
 
-Validation: formatting, locked check, **15 tests**, Clippy with warnings denied, and debug/release builds passed. Both views rendered in Linux software Vulkan, orders started the shared worker, and invalid arguments/output failures returned nonzero status. All four timed release cases completed and their CSV statistics were independently recomputed.
+Validation: formatting, locked check, **15 tests**, Clippy with warnings denied, and debug/release builds passed. Both views rendered in Linux software Vulkan, a release smoke completed harvesting/transport/construction while day/night controls remained independent, and invalid arguments/output failures returned nonzero status. All four timed release cases completed and their CSV statistics were independently recomputed.
 
 [Performance report and raw samples](https://github.com/pdahlbeck/hafthiWorld/blob/codex/gotland-visuals-performance/docs/performance/milestone3.md) · [strategy](https://github.com/pdahlbeck/hafthiWorld/blob/codex/gotland-visuals-performance/docs/screenshots/milestone3-strategy.png) · [first person](https://github.com/pdahlbeck/hafthiWorld/blob/codex/gotland-visuals-performance/docs/screenshots/milestone3-first-person.png)
 
