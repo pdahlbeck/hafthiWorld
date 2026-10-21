@@ -103,7 +103,7 @@ fn setup(
         ..default()
     });
     let trunk = meshes.add(Cylinder::new(0.12, 1.8));
-    let crown = meshes.add(Sphere::new(0.85));
+    let crown = meshes.add(Sphere::new(0.85).mesh().ico(2).expect("valid crown mesh"));
     let stump = meshes.add(Cylinder::new(0.14, 0.30));
     for (i, p) in TREE_POSITIONS.iter().enumerate() {
         commands

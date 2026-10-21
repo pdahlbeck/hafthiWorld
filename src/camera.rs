@@ -81,7 +81,19 @@ impl CameraRig {
 #[derive(Component)]
 struct WorldCamera;
 fn setup(mut commands: Commands, rig: Res<CameraRig>) {
-    commands.spawn((Camera3d::default(), rig.transform(), WorldCamera));
+    commands.spawn((
+        Camera3d::default(),
+        rig.transform(),
+        WorldCamera,
+        DistanceFog {
+            color: Color::srgb(0.64, 0.75, 0.76),
+            falloff: FogFalloff::Linear {
+                start: 28.0,
+                end: 100.0,
+            },
+            ..default()
+        },
+    ));
 }
 fn axis(keys: &ButtonInput<KeyCode>, positive: KeyCode, negative: KeyCode) -> f32 {
     f32::from(keys.pressed(positive)) - f32::from(keys.pressed(negative))
