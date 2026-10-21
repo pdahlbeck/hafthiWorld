@@ -91,7 +91,11 @@ fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
         }
         OrderButton::Sow => {
             ui.feedback = if settlement.farm.request_sow() {
-                "Sowing ordered. Worker collects four seed units and sows the field."
+                if settlement.calendar.can_sow() {
+                    "Sowing ordered. Worker collects four seed units and sows the field."
+                } else {
+                    "Sowing queued for spring. Seeds stay stored until the worker starts in spring or summer."
+                }
             } else {
                 "Need stored seeds and an unplanted or harvested field. V saves a stored sack for the next sowing."
             };
