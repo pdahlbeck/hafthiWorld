@@ -1,6 +1,6 @@
 # hafthiWorld
 
-Rust + Bevy 0.20 settlement simulation inspired by Viking Age Gotland. The second scoped milestone from [issue #1](https://github.com/pdahlbeck/hafthiWorld/issues/1) adds a playable resource chain: **order tree felling → carry logs to storage → carry stored timber to a construction site → finish a timber rack**. Strategy and first person observe the same running ECS world. Milestone 3 adds an original procedural coastal visual pass and portable performance instrumentation. The next scoped slice adds one finite, player-ordered crop cycle using the same worker and storage. The single worker, three finite trees and material-backed timber rack remain the same shared simulation in both views.
+Rust + Bevy 0.20 settlement simulation inspired by Viking Age Gotland. The second scoped milestone from [issue #1](https://github.com/pdahlbeck/hafthiWorld/issues/1) adds a playable resource chain: **order tree felling → carry logs to storage → carry stored timber to a construction site → finish a timber rack**. Strategy and first person observe the same running ECS world. Milestone 3 adds an original procedural coastal visual pass and portable performance instrumentation. The following small slices add one finite crop cycle and a two-sheep fleece chain using the same worker and storage. The single worker, three finite trees and material-backed timber rack remain the same shared simulation in both views.
 
 ## Run
 
@@ -29,6 +29,7 @@ macOS uses Metal; Linux needs a working graphics driver/display and Bevy's nativ
 | 1 / 2 / 3 | Select tree | Select tree while mouse is captured |
 | F | Order selected tree felled | Same order while mouse is captured |
 | O / R | Order sowing / reap the ripe field | Same orders while mouse is captured |
+| C | Order both sheep clipped | Same order while mouse is captured |
 | B | Order the fixed timber rack (two logs) | Same order while mouse is captured |
 | Escape | Quit gracefully | Release mouse; press again to return to strategy |
 
@@ -50,7 +51,8 @@ The timber chain has one worker, three fixed trees, one timber material and one 
 - `performance.rs`: low/high render settings, rolling CPU wall-frame statistics and a timed CSV benchmark. It never changes settlement resources or work.
 - `camera.rs`: explicit camera-mode resource, independent strategy/first-person poses, collision-aware movement, focus and cursor policy. It never mutates simulation.
 - `simulation.rs`: fixed-step worker tasks, finite tree/log states, construction state, field labour/transport and clock. One persistent worker handles both timber and farming.
-- `farming.rs`: one finite crop cycle, seed/grain accounting and persistent field/crop/sack visuals. It reads the shared settlement/worker state; it never advances work in rendering. Pure work progression has no camera/rendering/input dependency.
+- `farming.rs`: one finite crop cycle, seed/grain accounting and persistent field/crop/sack visuals. It reads the shared settlement/worker state; it never advances work in rendering.
+- `livestock.rs`: deterministic bounded grazing, finite fleece state, the three-sided wooden pen and persistent sheep/wool visuals. Work and transport still belong to the shared worker. Pure work progression has no camera/rendering/input dependency.
 - `orders.rs`: selection, tree ray picking, keyboard/native UI button orders and focus/mode guards. It records intent; it never moves workers or grants material.
 - `presentation.rs`: persistent worker/tree/log entities, axe motion, selection marker, construction parts, native Bevy 0.20 buttons and HUD reading shared state in `Update`. It does not advance the economy.
 - `main.rs`: plugin composition and window setup.
@@ -67,7 +69,7 @@ cargo clippy --locked -- -D warnings
 cargo build --locked
 ```
 
-Twenty-one tests cover the complete material chain, waiting for missing timber, idempotent orders, finite yields, frame partitioning, authored traversable routes, preserved entity identities across camera changes, clickable-button activation, keyboard orders in both modes, input suppression on focus loss/mouse release, retained camera poses and existing collision. Checks also cover shore/pine collision, daylight, benchmark arguments and slow-frame percentiles. Crop tests cover seed use, premature/repeated orders, physical delivery, mixed timber/farming routes, frame partitions, focus guards and persistent field/cargo entities across camera changes.
+Twenty-six tests cover the complete material chain, waiting for missing timber, idempotent orders, finite yields, frame partitioning, authored traversable routes, preserved entity identities across camera changes, clickable-button activation, keyboard orders in both modes, input suppression on focus loss/mouse release, retained camera poses and existing collision. Checks also cover shore/pine collision, daylight, benchmark arguments and slow-frame percentiles. Crop tests cover seed use, premature/repeated orders, physical delivery, mixed timber/farming routes, frame partitions, focus guards and persistent field/cargo entities across camera changes. Sheep tests add deterministic grazing, held animals, fixed drop positions, finite fleeces, mixed workloads, pen collision and persistent animal/wool identities.
 
 Linux software-Vulkan smoke captures for this milestone are in `docs/screenshots/milestone2-*.png`. They document functionality; macOS/Metal performance still needs desktop testing.
 
@@ -89,7 +91,7 @@ The crop then grows for **30 simulation seconds**, visibly rising and changing f
 
 Timber delivery/building, loose logs and ordered trees retain their existing priority; grain hauling and field work follow. A current task completes before another is accepted. Farm travel uses the southern stockpile approach rather than crossing the house. Crop growth advances with the fixed simulation even when the worker is busy elsewhere or either camera is active. **T/Y change presentation sunlight only** and never speed up, pause or reset crops. One sow/harvest cycle is available per session; restarting resets it.
 
-This is one field and one worker, with illustrative grain geometry and arbitrary seed/yield units. It does not yet implement species-specific cultivation, seed saving/replanting, food consumption, seasons, livestock, households, free field placement or saved games. The short growth/work durations are testing choices, not agricultural or historical measurements. Earlier milestone-3 benchmark results remain a record of that earlier scene; no new hardware performance claim is made for the crop slice.
+This is one field and one worker, with illustrative grain geometry and arbitrary seed/yield units. The crop slice does not implement species-specific cultivation, seed saving/replanting, food consumption, seasons, households, free field placement or saved games. The separate sheep slice below adds only bounded grazing and fleece transport. The short growth/work durations are testing choices, not agricultural or historical measurements. Earlier milestone-3 benchmark results remain a record of that earlier scene; no new hardware performance claim is made for the crop slice.
 
 Screenshots: [ripe plot in strategy](docs/screenshots/milestone4-ripe-strategy.png), [the same plot in first person](docs/screenshots/milestone4-ripe-first-person.png), and [completed delivery](docs/screenshots/milestone4-stored.png).
 
@@ -100,6 +102,24 @@ Screenshots: [ripe plot in strategy](docs/screenshots/milestone4-ripe-strategy.p
 3. Press R before the crop is ripe: no harvest should start. Pause sunlight with T, advance its hour with Y and switch cameras with Tab. Crop growth must continue, with the same worker/entity IDs and stocks.
 4. At ripe, press R twice. Observe reaping, ground sacks, one carried sack at a time, and four sacks eventually stored. Repeated O/R after completion must not add resources.
 5. Repeat while also ordering tree felling and the rack. Timber must still produce six total units, install two and store four after all three trees are harvested; grain remains exactly four in storage. The automated test also checks every sampled route stays walkable.
+
+## First sheep and wool chain
+
+Two original stylized sheep occupy the small three-sided wooden pen northeast of the house. They move and lower their heads using deterministic **simulation time**, in a small bounded grazing pattern. The pen's south side is open; its visible side/back rails block walking. They are the same persistent animal entities in both camera modes. Their grazing motion does not yet consume a grass/forage inventory.
+
+Press **C** or **Shear sheep** to order both unshorn animals clipped. Ordered animals hold their current positions until the existing worker reaches them; nothing is teleported to a separate scene. The worker goes via the southern stockpile approach and the east side of the house, enters the open pen, spends four simulation seconds clipping, then carries the two visible wool bundles individually to storage. Loose wool is collected before starting the next sheep. The shorn sheep has a smaller/darker coat and resumes its grazing motion; dropped bundles stay at their own fixed locations.
+
+Each sheep supplies **two wool units once**, four total per session. Each unit is exactly one of **in fleece, on ground, carried or stored**. C does not immediately award inventory, cannot interrupt a cargo delivery, and cannot reclip an already shorn animal or duplicate resources. There is still one worker: current tasks finish, timber/farm priorities remain ahead of sheep work, and simulation continues through Tab/T/Y. Restarting resets the session. No wool regrowth, feeding, health, breeding, lambs, milk, meat, spinning or trade is implemented in this slice. These animals are generic interpretations, not a claim to reconstruct a particular historic or modern Gotland sheep breed; yields and work times are technical choices.
+
+Screenshots: [initial flock](docs/screenshots/sheep-flock.png), [shared storage in first person](docs/screenshots/sheep-wool-first-person.png), and [completed wool delivery](docs/screenshots/sheep-wool-stored.png).
+
+### Sheep smoke test
+
+1. Start fresh. Inspect the two grazing sheep and the open south approach. The HUD should show zero shorn, four wool units in fleece, and none on ground/carried/stored. Wait: no wool should appear automatically.
+2. Press C twice. Follow the same worker around the house into the pen; queued sheep hold still. After clipping, its coat changes and two physical bundles appear. The animal resumes grazing without moving those dropped bundles.
+3. Press Tab during pickup/transport. Confirm the same animals, worker ID, tasks and material counts. Observe one carried bundle at a time; storage increases only after unloading.
+4. After both animals are clipped and all trips finish, expect **shorn = 2, fleece = 0, ground = 0, carried = 0, stored = 4**. Press C again: stock must stay four, and neither coat regrows.
+5. Repeat while ordering timber and crops. No worker clone or extra cargo should appear, the pen fences should block walking, and all chains must use the clear southern/eastern approach. Automated tests cover this combined workload, persistent visual IDs, fixed drop positions and resource accounting.
 
 ## Coastal visual pass (milestone 3)
 

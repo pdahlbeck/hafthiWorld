@@ -426,6 +426,7 @@ fn pine_position(i: u32) -> Vec2 {
 }
 pub fn walkable(p: Vec2) -> bool {
     inside_shore(p)
+        && !crate::livestock::fence_blocks(p)
         && !(p.x > -0.10 && p.x < 4.10 && p.y.abs() < 2.85)
         && !(p.x > -8.85 && p.x < -5.15 && p.y > 0.05 && p.y < 1.95)
         && !(0..9).any(|i| p.distance_squared(pine_position(i)) < 0.35_f32.powi(2))

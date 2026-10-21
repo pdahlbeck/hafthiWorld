@@ -12,3 +12,7 @@ The shallow-water bands and broken wave lines are stylized color/depth cues, not
 ## First crop slice
 
 The added field is an illustrative grain plot, not an identified archaeological field or a species-specific reconstruction. Its rectangular placement, rows, generic green/gold ears, sack shapes, four seed/yield units and 30-second growth interval are technical/artistic choices. No claim is made that these are Gotlandic crop yields, varieties, field organization or calendars around 900 CE. Farming-specific archaeological/botanical sources are required before adding such claims. The one-cycle prototype adds no livestock, seasonal calendar, diets or household reconstruction.
+
+## First sheep slice
+
+The roadmap's sheep-to-wool chain is represented by two generic stylized animals. No specific historic breed, modern Gotland sheep ancestry, stocking density, pasture requirement, shearing technology, yield or frequency is claimed. Grazing paths, the three-sided wooden pen, holding animals in place when ordered, the reduced shorn coat and two-unit fleece are gameplay/art interpretations. Four-second clipping is a technical demonstration, not a husbandry estimate. There is no simulated feed consumption, animal health, reproduction or wool regrowth yet. No third-party animal meshes or textures are used.

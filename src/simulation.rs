@@ -1,5 +1,6 @@
 //! Fixed-step logistics, independent of cameras, input and rendering.
 use crate::farming::{CropPhase, FIELD_WORK, Farm, GrainLocation, SeedLocation, grain_position};
+use crate::livestock::{Flock, PASTURE_GATE, WOOL_PER_SHEEP, WoolLocation};
 use bevy::prelude::*;
 
 pub const STOCKPILE: Vec2 = Vec2::new(-2.5, 3.5);
@@ -51,6 +52,7 @@ pub struct Settlement {
     pub logs: [LogLocation; TOTAL_LOGS],
     pub construction: Construction,
     pub farm: Farm,
+    pub flock: Flock,
 }
 impl Default for Settlement {
     fn default() -> Self {
@@ -59,6 +61,7 @@ impl Default for Settlement {
             logs: [LogLocation::InTree; TOTAL_LOGS],
             construction: Construction::default(),
             farm: Farm::default(),
+            flock: Flock::default(),
         }
     }
 }
@@ -117,6 +120,35 @@ pub enum Task {
     DeliveringGrain,
     StoringGrain,
     FromField,
+    ToPastureGateway,
+    ToPastureEdge,
+    ToPasture,
+    ToSheep,
+    Shearing,
+    ToWool,
+    LoadingWool,
+    FromPasture,
+    FromPastureEdge,
+    DeliveringWool,
+    StoringWool,
+}
+impl Task {
+    pub fn tending_sheep(self) -> bool {
+        matches!(
+            self,
+            Self::ToPastureGateway
+                | Self::ToPastureEdge
+                | Self::ToPasture
+                | Self::ToSheep
+                | Self::Shearing
+                | Self::ToWool
+                | Self::LoadingWool
+                | Self::FromPasture
+                | Self::FromPastureEdge
+                | Self::DeliveringWool
+                | Self::StoringWool
+        )
+    }
 }
 #[derive(Debug, Clone, Copy)]
 enum FarmJob {
@@ -130,6 +162,8 @@ pub struct Worker {
     pub task: Task,
     pub carrying: Option<usize>,
     pub carrying_grain: Option<usize>,
+    pub carrying_wool: Option<usize>,
+    sheep_hauling: bool,
     farm_job: FarmJob,
     target: usize,
     handling: f32,
@@ -142,6 +176,8 @@ impl Default for Worker {
             task: Task::Idle,
             carrying: None,
             carrying_grain: None,
+            carrying_wool: None,
+            sheep_hauling: false,
             farm_job: FarmJob::Sow,
             target: 0,
             handling: 0.0,
@@ -195,9 +231,32 @@ impl Worker {
         } else if farm.phase == CropPhase::Ripe && farm.harvest_ordered {
             self.farm_job = FarmJob::Reap;
         } else {
-            return false;
+            return self.choose_sheep_task(settlement);
         }
         self.start(Task::ToFarmGateway);
+        true
+    }
+    fn choose_sheep_task(&mut self, settlement: &Settlement) -> bool {
+        if let Some(wool) = settlement
+            .flock
+            .wool
+            .iter()
+            .position(|&w| w == WoolLocation::Ground)
+        {
+            self.target = wool;
+            self.sheep_hauling = true;
+        } else if let Some(sheep) = settlement
+            .flock
+            .sheep
+            .iter()
+            .position(|s| s.ordered && !s.shorn)
+        {
+            self.target = sheep;
+            self.sheep_hauling = false;
+        } else {
+            return false;
+        }
+        self.start(Task::ToPastureGateway);
         true
     }
     pub fn advance(&mut self, mut seconds: f32, settlement: &mut Settlement) {
@@ -207,10 +266,12 @@ impl Worker {
         while seconds > 0.0 {
             if self.task == Task::Idle && !self.choose_task(settlement) {
                 settlement.farm.grow(seconds as f64);
+                settlement.flock.graze(seconds as f64);
                 return;
             }
             let step = seconds.min(1.0 / 64.0);
             settlement.farm.grow(step as f64);
+            settlement.flock.graze(step as f64);
             self.advance_work(step, settlement);
             seconds -= step;
         }
@@ -233,8 +294,23 @@ impl Worker {
                 | Task::ToFarmGateway
                 | Task::ToField
                 | Task::DeliveringGrain
-                | Task::FromField => {
+                | Task::FromField
+                | Task::ToPastureGateway
+                | Task::ToPastureEdge
+                | Task::ToPasture
+                | Task::ToSheep
+                | Task::ToWool
+                | Task::FromPasture
+                | Task::FromPastureEdge
+                | Task::DeliveringWool => {
                     let goal = match self.task {
+                        Task::ToPastureGateway | Task::DeliveringWool => STOCKPILE,
+                        Task::ToPastureEdge | Task::FromPastureEdge => FIELD_WORK,
+                        Task::ToPasture | Task::FromPasture => PASTURE_GATE,
+                        Task::ToSheep => {
+                            settlement.flock.sheep[self.target].position + Vec2::new(0.0, 0.75)
+                        }
+                        Task::ToWool => settlement.flock.ground[self.target],
                         Task::ToTree => TREE_POSITIONS[self.target] + Vec2::new(0.65, 0.45),
                         Task::ToLog if self.building_delivery => STOCKPILE,
                         Task::ToLog => ground_log_position(self.target),
@@ -257,6 +333,15 @@ impl Worker {
                     self.position = goal;
                     seconds -= travel;
                     self.start(match self.task {
+                        Task::ToPastureGateway => Task::ToPastureEdge,
+                        Task::ToPastureEdge => Task::ToPasture,
+                        Task::ToPasture if self.sheep_hauling => Task::ToWool,
+                        Task::ToPasture => Task::ToSheep,
+                        Task::ToSheep => Task::Shearing,
+                        Task::ToWool => Task::LoadingWool,
+                        Task::FromPasture => Task::FromPastureEdge,
+                        Task::FromPastureEdge => Task::DeliveringWool,
+                        Task::DeliveringWool => Task::StoringWool,
                         Task::ToFarmGateway if matches!(self.farm_job, FarmJob::Sow) => {
                             Task::LoadingSeeds
                         }
@@ -279,7 +364,7 @@ impl Worker {
                     let duration = match self.task {
                         Task::Felling => FELL_SECONDS,
                         Task::Assembling => BUILD_SECONDS,
-                        Task::Sowing | Task::Reaping => 4.0,
+                        Task::Sowing | Task::Reaping | Task::Shearing => 4.0,
                         _ => HANDLING_SECONDS,
                     };
                     let used = seconds.min(duration - self.handling);
@@ -289,6 +374,28 @@ impl Worker {
                         break;
                     }
                     match self.task {
+                        Task::Shearing => {
+                            assert!(
+                                settlement.flock.clip(self.target),
+                                "ordered fleece must be available"
+                            );
+                            self.target *= WOOL_PER_SHEEP;
+                            self.sheep_hauling = true;
+                            self.start(Task::ToWool);
+                        }
+                        Task::LoadingWool => {
+                            settlement.flock.wool[self.target] = WoolLocation::Carried;
+                            self.carrying_wool = Some(self.target);
+                            self.start(Task::FromPasture);
+                        }
+                        Task::StoringWool => {
+                            let wool = self
+                                .carrying_wool
+                                .take()
+                                .expect("wool delivery needs cargo");
+                            settlement.flock.wool[wool] = WoolLocation::Stored;
+                            self.start(Task::Idle);
+                        }
                         Task::LoadingSeeds => {
                             settlement.farm.seeds = SeedLocation::Carried;
                             self.start(Task::ToField);
