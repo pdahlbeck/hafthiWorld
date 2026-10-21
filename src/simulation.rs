@@ -2,6 +2,7 @@
 use crate::farming::{CropPhase, FIELD_WORK, Farm, GrainLocation, SeedLocation, grain_position};
 use crate::household::{HOME_DELIVERY, HOME_ID, Household};
 use crate::livestock::{Flock, PASTURE_GATE, WOOL_PER_SHEEP, WoolLocation};
+use crate::trade::{Barter, SaltLocation, TRADE_WORK};
 use bevy::prelude::*;
 
 pub const STOCKPILE: Vec2 = Vec2::new(-2.5, 3.5);
@@ -55,6 +56,7 @@ pub struct Settlement {
     pub farm: Farm,
     pub flock: Flock,
     pub household: Household,
+    pub barter: Barter,
 }
 impl Default for Settlement {
     fn default() -> Self {
@@ -65,6 +67,7 @@ impl Default for Settlement {
             farm: Farm::default(),
             flock: Flock::default(),
             household: Household::default(),
+            barter: Barter::default(),
         }
     }
 }
@@ -146,8 +149,27 @@ pub enum Task {
     ToHome,
     UnloadingFood,
     FromHome,
+    ToTradeStore,
+    LoadingTradeWool,
+    ToTrader,
+    HandingTradeWool,
+    LoadingSalt,
+    FromTrader,
+    StoringSalt,
 }
 impl Task {
+    pub fn trading(self) -> bool {
+        matches!(
+            self,
+            Self::ToTradeStore
+                | Self::LoadingTradeWool
+                | Self::ToTrader
+                | Self::HandingTradeWool
+                | Self::LoadingSalt
+                | Self::FromTrader
+                | Self::StoringSalt
+        )
+    }
     pub fn tending_sheep(self) -> bool {
         matches!(
             self,
@@ -179,6 +201,7 @@ pub struct Worker {
     pub carrying: Option<usize>,
     pub carrying_grain: Option<usize>,
     pub carrying_wool: Option<usize>,
+    pub carrying_salt: Option<usize>,
     sheep_hauling: bool,
     farm_job: FarmJob,
     target: usize,
@@ -194,6 +217,7 @@ impl Default for Worker {
             carrying: None,
             carrying_grain: None,
             carrying_wool: None,
+            carrying_salt: None,
             sheep_hauling: false,
             farm_job: FarmJob::Sow,
             target: 0,
@@ -229,6 +253,11 @@ impl Worker {
         {
             self.target = grain;
             self.start(Task::ToFoodStore);
+            return true;
+        }
+        if let Some(wool) = settlement.barter.wool_candidate(&settlement.flock.wool) {
+            self.target = wool;
+            self.start(Task::ToTradeStore);
             return true;
         }
         if settlement.construction.ordered && !settlement.construction.complete {
@@ -343,11 +372,16 @@ impl Worker {
                 | Task::FromPasture
                 | Task::FromPastureEdge
                 | Task::DeliveringWool
+                | Task::ToTradeStore
+                | Task::ToTrader
+                | Task::FromTrader
                 | Task::ToSeedStore
                 | Task::ToFoodStore
                 | Task::ToHome
                 | Task::FromHome => {
                     let goal = match self.task {
+                        Task::ToTradeStore | Task::FromTrader => STOCKPILE,
+                        Task::ToTrader => TRADE_WORK,
                         Task::ToSeedStore | Task::ToFoodStore | Task::FromHome => STOCKPILE,
                         Task::ToHome => HOME_DELIVERY,
                         Task::ToPastureGateway | Task::DeliveringWool => STOCKPILE,
@@ -379,6 +413,10 @@ impl Worker {
                     self.position = goal;
                     seconds -= travel;
                     self.start(match self.task {
+                        Task::ToTradeStore => Task::LoadingTradeWool,
+                        Task::ToTrader => Task::HandingTradeWool,
+                        Task::FromTrader if self.carrying_salt.is_some() => Task::StoringSalt,
+                        Task::FromTrader => Task::Idle,
                         Task::ToSeedStore => Task::PreparingSeeds,
                         Task::ToFoodStore => Task::LoadingFood,
                         Task::ToHome => Task::UnloadingFood,
@@ -424,6 +462,48 @@ impl Worker {
                         break;
                     }
                     match self.task {
+                        Task::LoadingTradeWool => {
+                            if settlement.barter.wool_candidate(&settlement.flock.wool)
+                                != Some(self.target)
+                            {
+                                self.start(Task::Idle);
+                                continue;
+                            }
+                            settlement.flock.wool[self.target] = WoolLocation::Carried;
+                            self.carrying_wool = Some(self.target);
+                            self.start(Task::ToTrader);
+                        }
+                        Task::HandingTradeWool => {
+                            let wool = self
+                                .carrying_wool
+                                .take()
+                                .expect("trade delivery requires wool");
+                            assert!(
+                                settlement
+                                    .barter
+                                    .deliver_wool(wool, &mut settlement.flock.wool)
+                            );
+                            if let Some(salt) = settlement.barter.paid_salt() {
+                                self.target = salt;
+                                self.start(Task::LoadingSalt);
+                            } else {
+                                self.start(Task::FromTrader);
+                            }
+                        }
+                        Task::LoadingSalt => {
+                            assert_eq!(settlement.barter.salt[self.target], SaltLocation::Paid);
+                            settlement.barter.salt[self.target] = SaltLocation::Carried;
+                            self.carrying_salt = Some(self.target);
+                            self.start(Task::FromTrader);
+                        }
+                        Task::StoringSalt => {
+                            let salt = self
+                                .carrying_salt
+                                .take()
+                                .expect("salt delivery requires cargo");
+                            settlement.barter.salt[salt] = SaltLocation::Stored;
+                            self.start(Task::Idle);
+                        }
                         Task::PreparingSeeds => {
                             settlement.farm.save_seed(self.target);
                             self.start(Task::Idle);

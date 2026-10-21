@@ -7,6 +7,7 @@ mod orders;
 mod performance;
 mod presentation;
 mod simulation;
+mod trade;
 mod world;
 use bevy::prelude::*;
 
@@ -54,6 +55,7 @@ fn main() -> AppExit {
             farming::FarmingPlugin,
             livestock::LivestockPlugin,
             household::HouseholdPlugin,
+            trade::TradePlugin,
             performance::PerformancePlugin,
         ))
         .run()

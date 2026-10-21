@@ -25,3 +25,8 @@ Home 1 is a single abstract ownership/demand unit attached to the existing worke
 ## Seed reservation and repeat crops
 
 The one-sack-to-four-seed-units conversion, four-second sorting task, standing reservation priority, reusable sack slots and repeatable thirty-second crop growth are technical game abstractions. They are not measurements of medieval seed ratios, harvest frequency, agricultural labor or a Gotlandic seasonal calendar. The current scene does not depict threshing, drying, winnowing or seed selection in detail; the preparation task stands in for that future processing chain. No additional archaeological or botanical claim is introduced.
+
+
+## First shore barter offer
+
+The roadmap requests Baltic trade and imported salt; this slice depicts only a fictional visitor's brought-in stock. It adds no claim about a specific trade route, place of salt production, archaeological cargo assemblage, Gotlandic salt extraction or a historical wool/salt price. The 2:1 exchange, two available pouches, stationary visitor, blue tunic, pale merchandise sacks and cloth spread are illustrative game rules/art. Source-specific research is still required before adding named origins, documented exchange rates, a harbour reconstruction or vessel types. Salt has no food-processing effect yet. No external meshes, textiles or character art are used.

@@ -1,6 +1,6 @@
 # hafthiWorld
 
-Rust + Bevy 0.20 settlement simulation inspired by Viking Age Gotland. The second scoped milestone from [issue #1](https://github.com/pdahlbeck/hafthiWorld/issues/1) adds a playable resource chain: **order tree felling → carry logs to storage → carry stored timber to a construction site → finish a timber rack**. Strategy and first person observe the same running ECS world. Milestone 3 adds an original procedural coastal visual pass and portable performance instrumentation. The following small slices add a crop/seed loop, a two-sheep fleece chain and a first owned household pantry, using the same worker and storage. The single worker, three finite trees and material-backed timber rack remain the same shared simulation in both views.
+Rust + Bevy 0.20 settlement simulation inspired by Viking Age Gotland. The second scoped milestone from [issue #1](https://github.com/pdahlbeck/hafthiWorld/issues/1) adds a playable resource chain: **order tree felling → carry logs to storage → carry stored timber to a construction site → finish a timber rack**. Strategy and first person observe the same running ECS world. Milestone 3 adds an original procedural coastal visual pass and portable performance instrumentation. The following small slices add a crop/seed loop, a two-sheep fleece chain and a first owned household pantry and a finite shore barter offer, using the same worker and storage. The single worker, three finite trees and material-backed timber rack remain the same shared simulation in both views.
 
 ## Run
 
@@ -32,6 +32,7 @@ macOS uses Metal; Linux needs a working graphics driver/display and Bevy's nativ
 | C | Order both sheep clipped | Same order while mouse is captured |
 | H | Order stored grain supplied to the home | Same order while mouse is captured |
 | V | Order one stored sack per harvest saved as seed | Same order while mouse is captured |
+| J | Order two stored wool per salt pouch at the shore visitor | Same order while mouse is captured |
 | B | Order the fixed timber rack (two logs) | Same order while mouse is captured |
 | Escape | Quit gracefully | Release mouse; press again to return to strategy |
 
@@ -43,7 +44,7 @@ Three trees contain **two log units each**. Nothing is harvested automatically. 
 
 Press **B** or **Build rack** to order the single predefined timber rack beside the stockpile. It can be ordered before any wood exists: it waits. The worker picks up **stored** logs, carries each to the site and installs it. Each pickup removes that log from available storage. After two deliveries and three seconds of assembly, the crossbeam appears and the rack is complete. No resources are deducted merely for placing an order, and repeated orders never charge twice. One tree supplies this rack; harvesting all three leaves four log units in storage after construction.
 
-The worker prioritizes supplying an ordered rack from available storage, then loose logs, then queued trees. Already-started work finishes before the next task is chosen. The HUD exposes the persistent worker ID, task, selected tree, time and material locations. Every unit is in exactly one state: **in tree, on ground, carried, stored or installed**; their sum stays six. Installed units are represented by the rack structure rather than duplicate log meshes. Camera switching does not spawn replacement entities or reset tasks, orders or stocks.
+Among timber jobs, the worker prioritizes supplying an ordered rack from available storage, then loose logs, then queued trees. Already-started work finishes before the next task is chosen. The HUD exposes the persistent worker ID, task, selected tree, time and material locations. Every unit is in exactly one state: **in tree, on ground, carried, stored or installed**; their sum stays six. Installed units are represented by the rack structure rather than duplicate log meshes. Camera switching does not spawn replacement entities or reset tasks, orders or stocks.
 
 The timber chain has one worker, three fixed trees, one timber material and one fixed building site. The crop slice below shares that same worker and adds separate seed/grain accounting. It does not include free placement, advanced pathfinding, multiple workers, durability, further construction recipes or saved games. Routes are authored to stay clear of the existing house/limestone footprint; the small rack is an open prototype frame without its own collision. Restarting resets the session. Tree yield, rack cost, dimensions and work durations are technical/art choices, not historical measurements.
 
@@ -52,10 +53,11 @@ The timber chain has one worker, three fixed trees, one timber material and one 
 - `world.rs`: deterministic irregular shore, shallow sea bands and wave lines, shared grass patches with wind, pine group, timber farm silhouette, sunlight/sky/fog and shared shore/obstacle queries.
 - `performance.rs`: low/high render settings, rolling CPU wall-frame statistics and a timed CSV benchmark. It never changes settlement resources or work.
 - `camera.rs`: explicit camera-mode resource, independent strategy/first-person poses, collision-aware movement, focus and cursor policy. It never mutates simulation.
-- `simulation.rs`: fixed-step worker tasks, finite tree/log states, construction state, field labour/transport and clock. One persistent worker handles both timber and farming.
-- `farming.rs`: repeatable crop cycles, explicit seed reservation and cumulative grain accounting and persistent field/crop/sack visuals. It reads the shared settlement/worker state; it never advances work in rendering.
+- `simulation.rs`: fixed-step worker tasks, finite tree/log states, construction state, field labour/transport and clock. One persistent worker handles timber, farming, sheep, food supply and barter transport.
+- `farming.rs`: repeatable crop cycles, explicit seed reservation and cumulative grain accounting, plus persistent field/crop/sack visuals. It reads the shared settlement/worker state; it never advances work in rendering.
 - `livestock.rs`: deterministic bounded grazing, finite fleece state, the three-sided wooden pen and persistent sheep/wool visuals. Work and transport still belong to the shared worker.
 - `household.rs`: one household ID, its owned pantry/ration clock and a persistent visible storage rack by the house door. The worker is assigned to that household; supply movement belongs to the common worker task machine. Pure work progression has no camera/rendering/input dependency.
+- `trade.rs`: a visitor with two finite salt pouches, an explicit two-wool price, physical handover and persistent visitor/salt visuals. Payment and cargo movement run in the common worker task machine.
 - `orders.rs`: selection, tree ray picking, keyboard/native UI button orders and focus/mode guards. It records intent; it never moves workers or grants material.
 - `presentation.rs`: persistent worker/tree/log entities, axe motion, selection marker, construction parts, native Bevy 0.20 buttons and HUD reading shared state in `Update`. It does not advance the economy.
 - `main.rs`: plugin composition and window setup.
@@ -72,7 +74,7 @@ cargo clippy --locked -- -D warnings
 cargo build --locked
 ```
 
-Thirty-eight tests cover the complete material chain, waiting for missing timber, idempotent orders, finite yields, frame partitioning, authored traversable routes, preserved entity identities across camera changes, clickable-button activation, keyboard orders in both modes, input suppression on focus loss/mouse release, retained camera poses and existing collision. Checks also cover shore/pine collision, daylight, benchmark arguments and slow-frame percentiles. Crop tests cover seed use, premature/repeated orders, physical delivery, mixed timber/farming routes, frame partitions, focus guards and persistent field/cargo entities across camera changes. Sheep tests add deterministic grazing, held animals, fixed drop positions, finite fleeces, mixed workloads, pen collision and persistent animal/wool identities. Repeat-crop tests add three complete harvests, cumulative food/seed balance, live-stock overwrite guards, no recovery of consumed seed, and reused crop/sack entities across camera changes. Household tests cover owned-food consumption, waiting supply orders, physical delivery, ration timing/shortages independent of worker count, nonmember guards, mixed-work routes and persistent home/cargo identities.
+Forty-four tests cover the complete material chain, waiting for missing timber, idempotent orders, finite yields, frame partitioning, authored traversable routes, preserved entity identities across camera changes, clickable-button activation, keyboard orders in both modes, input suppression on focus loss/mouse release, retained camera poses and existing collision. Checks also cover shore/pine collision, daylight, benchmark arguments and slow-frame percentiles. Crop tests cover seed use, premature/repeated orders, physical delivery, mixed timber/farming routes, frame partitions, focus guards and persistent field/cargo entities across camera changes. Sheep tests add deterministic grazing, held animals, fixed drop positions, finite fleeces, mixed workloads, pen collision and persistent animal/wool identities. Repeat-crop tests add three complete harvests, cumulative food/seed balance, live-stock overwrite guards, no recovery of consumed seed, and reused crop/sack entities across camera changes. Barter tests cover no-order/missing-payment waits, partial physical payment, finite offers, wool/salt conservation, single cargo, safe mixed-work routes, frame partitions and persistent visitor/cargo entities in both views. Native focus/cursor guards include J. Household tests cover owned-food consumption, waiting supply orders, physical delivery, ration timing/shortages independent of worker count, nonmember guards, mixed-work routes and persistent home/cargo identities.
 
 Linux software-Vulkan smoke captures for this milestone are in `docs/screenshots/milestone2-*.png`. They document functionality; macOS/Metal performance still needs desktop testing.
 
@@ -112,7 +114,7 @@ Two original stylized sheep occupy the small three-sided wooden pen northeast of
 
 Press **C** or **Shear sheep** to order both unshorn animals clipped. Ordered animals hold their current positions until the existing worker reaches them; nothing is teleported to a separate scene. The worker goes via the southern stockpile approach and the east side of the house, enters the open pen, spends four simulation seconds clipping, then carries the two visible wool bundles individually to storage. Loose wool is collected before starting the next sheep. The shorn sheep has a smaller/darker coat and resumes its grazing motion; dropped bundles stay at their own fixed locations.
 
-Each sheep supplies **two wool units once**, four total per session. Each unit is exactly one of **in fleece, on ground, carried or stored**. C does not immediately award inventory, cannot interrupt a cargo delivery, and cannot reclip an already shorn animal or duplicate resources. There is still one worker: current tasks finish, timber/farm priorities remain ahead of sheep work, and simulation continues through Tab/T/Y. Restarting resets the session. No wool regrowth, feeding, health, breeding, lambs, milk, meat, spinning or trade is implemented in this slice. These animals are generic interpretations, not a claim to reconstruct a particular historic or modern Gotland sheep breed; yields and work times are technical choices.
+Each sheep supplies **two wool units once**, four total per session. Each unit is exactly one of **in fleece, on ground, carried, stored or owned by the trader**. C does not immediately award inventory, cannot interrupt a cargo delivery, and cannot reclip an already shorn animal or duplicate resources. There is still one worker: current tasks finish, timber/farm priorities remain ahead of sheep work, and simulation continues through Tab/T/Y. Restarting resets the session. No wool regrowth, feeding, health, breeding, lambs, milk, meat or spinning is implemented. The later barter step below adds one fixed wool exchange. These animals are generic interpretations, not a claim to reconstruct a particular historic or modern Gotland sheep breed; yields and work times are technical choices.
 
 Screenshots: [initial flock](docs/screenshots/sheep-flock.png), [shared storage in first person](docs/screenshots/sheep-wool-first-person.png), and [completed wool delivery](docs/screenshots/sheep-wool-stored.png).
 
@@ -184,7 +186,7 @@ For the visual smoke check, inspect both camera modes, wind/water movement, T/Y 
 
 ## Direction and license
 
-Future work: Gotland visual refinement, more construction recipes, independent households, seasons, barter and Baltic shipping. Follow [AGENTS.md](AGENTS.md) and the scoped PR sequence in issue #1. Do not copy proprietary game assets or claim historical certainty without evidence.
+Future work: Gotland visual refinement, more construction recipes, independent households, seasons, more trade and Baltic shipping. Follow [AGENTS.md](AGENTS.md) and the scoped PR sequence in issue #1. Do not copy proprietary game assets or claim historical certainty without evidence.
 
 A project license has not yet been selected. All rights reserved until the repository owner chooses one.
 
@@ -210,3 +212,26 @@ Screenshots: [saved seed and remaining grain](docs/screenshots/seed-reserved.png
 4. Switch Tab during carrying/growth. The same worker, seed, crop and pantry counters persist. T/Y still affect sunlight only.
 5. If ripe while old grain remains, press R and verify the refusal leaves stocks intact. After the three old units have been eaten, press R again. **Harvests 2** must yield four new sacks, then one saved batch and three further meals, without resetting cumulative food use. Repeat O/R for a third crop.
 6. In a separate fresh session, omit V: H/O/R still deliver four meals, and O must be refused after they run out because no seed was saved.
+
+## Shore barter: wool for salt
+
+A blue-clad visitor stands on the southwest shore with **two pale salt pouches** on a cloth spread. Press **J** or **Barter wool/salt** to order a standing exchange. Press **C** to shear and store wool if needed. Nothing moves merely because J is ordered: a new exchange waits for **two actual stored wool bundles** and one remaining salt offer.
+
+The same worker picks up one wool bundle from storage, carries it to the shore and hands it over. The bundle changes **stored → carried → trader**, using its existing entity. A single delivered bundle does not release salt. After the second physical handover, one of the visitor's existing pouches changes **offered → paid**. The worker then picks up that pouch, carries it back and unloads it into shared storage: **paid → carried → stored**. A paid pouch is still at the shore until pickup; it is not counted as stored while in transit. The next exchange starts only after the previous salt delivery finishes. The HUD shows all these states, including wool now owned by the visitor.
+
+J is idempotent and remains ordered until both offers are exhausted. The current four-wool flock can buy at most **two salt pouches**. Salt and traded wool do not respawn; repeated C/J cannot create further goods. Every wool bundle remains in exactly one of fleece/ground/carried/stored/trader, totaling four, and salt offered + paid + carried + stored always totals two. The number of fully paid pouches equals `floor(trader wool / 2)`. Without J, the previous sheep loop still leaves four wool bundles in storage and both salt pouches with the visitor.
+
+Seed saving and home food supply keep priority over starting a new trade. With those demands satisfied, available barter precedes new production work. Current tasks and deliveries always finish, and the worker returns to the stockpile before accepting other jobs; the shore route stays clear of the house, rock and rack. Camera changes and sunlight controls do not alter orders, price, stocks or cargo.
+
+This is one fixed offer and one stationary visitor, with no currency, negotiations, generic market, ship movement, replenishment or saved games. The visitor is separate from the one resident worker and does not join household labor. Salt is brought-in merchandise with an unspecified origin; there is no local extraction or production. It is stored only and does not yet preserve food, season meals or affect household consumption. The 2:1 exchange rate, pouch sizes, costume and cloth display are illustrative game choices, not documented Gotlandic prices or merchant practices around 900 CE. The visitor and display are small nonblocking props, like the current worker.
+
+Screenshots: [waiting for wool](docs/screenshots/barter-waiting.png), [one completed exchange](docs/screenshots/barter-first-exchange.png), [salt in transit in first person](docs/screenshots/barter-salt-carried.png), and [both finite exchanges completed](docs/screenshots/barter-finished.png).
+
+### Barter smoke test
+
+1. Start fresh. Verify **offered 2 / paid 0 / carried 0 / stored 0**, and no wool at the visitor.
+2. Click J twice before shearing. Nothing should be delivered and no salt should be granted. Press C and follow the existing wool bundles into shared storage.
+3. When two bundles are stored, watch one carried to the visitor. After only one handover, both salt pouches must remain offered. The other wool bundle is then carried separately.
+4. After the second handover, watch paid salt move to carried and then stored. Press Tab during transport: the worker ID, cargo and inventories persist. Switch back; the strategy pose is retained.
+5. Let both exchanges finish. Verify **trader wool 4**, **salt stored 2**, all other wool/salt transport counts zero and both sheep shorn. The visitor's display is now empty of salt; four wool bundles remain there.
+6. Repeat J/C. No additional wool or salt should appear. In a separate session without J, C should still leave four wool in shared storage. H/V/O/R and timber construction remain available; mixed-work/material invariants are covered by tests.
