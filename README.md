@@ -1,6 +1,6 @@
 # hafthiWorld
 
-Rust + Bevy 0.20 settlement simulation inspired by Viking Age Gotland. The second scoped milestone from [issue #1](https://github.com/pdahlbeck/hafthiWorld/issues/1) adds a playable resource chain: **order tree felling → carry logs to storage → carry stored timber to a construction site → finish a timber rack**. Strategy and first person observe the same running ECS world. Milestone 3 adds an original procedural coastal visual pass and portable performance instrumentation. The following small slices add one finite crop cycle and a two-sheep fleece chain using the same worker and storage. The single worker, three finite trees and material-backed timber rack remain the same shared simulation in both views.
+Rust + Bevy 0.20 settlement simulation inspired by Viking Age Gotland. The second scoped milestone from [issue #1](https://github.com/pdahlbeck/hafthiWorld/issues/1) adds a playable resource chain: **order tree felling → carry logs to storage → carry stored timber to a construction site → finish a timber rack**. Strategy and first person observe the same running ECS world. Milestone 3 adds an original procedural coastal visual pass and portable performance instrumentation. The following small slices add a finite crop cycle, a two-sheep fleece chain and a first owned household pantry, using the same worker and storage. The single worker, three finite trees and material-backed timber rack remain the same shared simulation in both views.
 
 ## Run
 
@@ -30,6 +30,7 @@ macOS uses Metal; Linux needs a working graphics driver/display and Bevy's nativ
 | F | Order selected tree felled | Same order while mouse is captured |
 | O / R | Order sowing / reap the ripe field | Same orders while mouse is captured |
 | C | Order both sheep clipped | Same order while mouse is captured |
+| H | Order stored grain supplied to the home | Same order while mouse is captured |
 | B | Order the fixed timber rack (two logs) | Same order while mouse is captured |
 | Escape | Quit gracefully | Release mouse; press again to return to strategy |
 
@@ -52,7 +53,8 @@ The timber chain has one worker, three fixed trees, one timber material and one 
 - `camera.rs`: explicit camera-mode resource, independent strategy/first-person poses, collision-aware movement, focus and cursor policy. It never mutates simulation.
 - `simulation.rs`: fixed-step worker tasks, finite tree/log states, construction state, field labour/transport and clock. One persistent worker handles both timber and farming.
 - `farming.rs`: one finite crop cycle, seed/grain accounting and persistent field/crop/sack visuals. It reads the shared settlement/worker state; it never advances work in rendering.
-- `livestock.rs`: deterministic bounded grazing, finite fleece state, the three-sided wooden pen and persistent sheep/wool visuals. Work and transport still belong to the shared worker. Pure work progression has no camera/rendering/input dependency.
+- `livestock.rs`: deterministic bounded grazing, finite fleece state, the three-sided wooden pen and persistent sheep/wool visuals. Work and transport still belong to the shared worker.
+- `household.rs`: one household ID, its owned pantry/ration clock and a persistent visible storage rack by the house door. The worker is assigned to that household; supply movement belongs to the common worker task machine. Pure work progression has no camera/rendering/input dependency.
 - `orders.rs`: selection, tree ray picking, keyboard/native UI button orders and focus/mode guards. It records intent; it never moves workers or grants material.
 - `presentation.rs`: persistent worker/tree/log entities, axe motion, selection marker, construction parts, native Bevy 0.20 buttons and HUD reading shared state in `Update`. It does not advance the economy.
 - `main.rs`: plugin composition and window setup.
@@ -69,7 +71,7 @@ cargo clippy --locked -- -D warnings
 cargo build --locked
 ```
 
-Twenty-six tests cover the complete material chain, waiting for missing timber, idempotent orders, finite yields, frame partitioning, authored traversable routes, preserved entity identities across camera changes, clickable-button activation, keyboard orders in both modes, input suppression on focus loss/mouse release, retained camera poses and existing collision. Checks also cover shore/pine collision, daylight, benchmark arguments and slow-frame percentiles. Crop tests cover seed use, premature/repeated orders, physical delivery, mixed timber/farming routes, frame partitions, focus guards and persistent field/cargo entities across camera changes. Sheep tests add deterministic grazing, held animals, fixed drop positions, finite fleeces, mixed workloads, pen collision and persistent animal/wool identities.
+Thirty-three tests cover the complete material chain, waiting for missing timber, idempotent orders, finite yields, frame partitioning, authored traversable routes, preserved entity identities across camera changes, clickable-button activation, keyboard orders in both modes, input suppression on focus loss/mouse release, retained camera poses and existing collision. Checks also cover shore/pine collision, daylight, benchmark arguments and slow-frame percentiles. Crop tests cover seed use, premature/repeated orders, physical delivery, mixed timber/farming routes, frame partitions, focus guards and persistent field/cargo entities across camera changes. Sheep tests add deterministic grazing, held animals, fixed drop positions, finite fleeces, mixed workloads, pen collision and persistent animal/wool identities. Household tests cover owned-food consumption, waiting supply orders, physical delivery, ration timing/shortages independent of worker count, nonmember guards, mixed-work routes and persistent home/cargo identities.
 
 Linux software-Vulkan smoke captures for this milestone are in `docs/screenshots/milestone2-*.png`. They document functionality; macOS/Metal performance still needs desktop testing.
 
@@ -89,9 +91,9 @@ A single tilled plot lies southeast of the house. Press **O** or **Sow field**. 
 
 The crop then grows for **30 simulation seconds**, visibly rising and changing from green to gold. It does not reap itself. Wait for **ripe** in the HUD and press **R** or **Reap crop**; premature orders are rejected with feedback. After walking back and four seconds of reaping, the worker leaves four finite grain sacks at the field and carries each separately to the stockpile. Each is either **unproduced, on the field, carried or stored**. The HUD shows those material counts separately from timber. No grain is credited merely for issuing an order, and repeating O/R cannot recreate seed, regrow the field or duplicate grain.
 
-Timber delivery/building, loose logs and ordered trees retain their existing priority; grain hauling and field work follow. A current task completes before another is accepted. Farm travel uses the southern stockpile approach rather than crossing the house. Crop growth advances with the fixed simulation even when the worker is busy elsewhere or either camera is active. **T/Y change presentation sunlight only** and never speed up, pause or reset crops. One sow/harvest cycle is available per session; restarting resets it.
+Among production tasks, timber delivery/building, loose logs and ordered trees retain their existing priority; grain hauling and field work follow. When H is ordered and grain is already stored, the worker supplies the home before accepting another production task. A current task completes before another is accepted. Farm travel uses the southern stockpile approach rather than crossing the house. Crop growth advances with the fixed simulation even when the worker is busy elsewhere or either camera is active. **T/Y change presentation sunlight only** and never speed up, pause or reset crops. One sow/harvest cycle is available per session; restarting resets it.
 
-This is one field and one worker, with illustrative grain geometry and arbitrary seed/yield units. The crop slice does not implement species-specific cultivation, seed saving/replanting, food consumption, seasons, households, free field placement or saved games. The separate sheep slice below adds only bounded grazing and fleece transport. The short growth/work durations are testing choices, not agricultural or historical measurements. Earlier milestone-3 benchmark results remain a record of that earlier scene; no new hardware performance claim is made for the crop slice.
+This is one field and one worker, with illustrative grain geometry and arbitrary seed/yield units. The crop slice does not implement species-specific cultivation, seed saving/replanting, seasons, multiple households, free field placement or saved games. The household slice below adds abstract food use from delivered grain. The separate sheep slice below adds only bounded grazing and fleece transport. The short growth/work durations are testing choices, not agricultural or historical measurements. Earlier milestone-3 benchmark results remain a record of that earlier scene; no new hardware performance claim is made for the crop slice.
 
 Screenshots: [ripe plot in strategy](docs/screenshots/milestone4-ripe-strategy.png), [the same plot in first person](docs/screenshots/milestone4-ripe-first-person.png), and [completed delivery](docs/screenshots/milestone4-stored.png).
 
@@ -120,6 +122,26 @@ Screenshots: [initial flock](docs/screenshots/sheep-flock.png), [shared storage 
 3. Press Tab during pickup/transport. Confirm the same animals, worker ID, tasks and material counts. Observe one carried bundle at a time; storage increases only after unloading.
 4. After both animals are clipped and all trips finish, expect **shorn = 2, fleece = 0, ground = 0, carried = 0, stored = 4**. Press C again: stock must stay four, and neither coat regrows.
 5. Repeat while ordering timber and crops. No worker clone or extra cargo should appear, the pen fences should block walking, and all chains must use the clear southern/eastern approach. Automated tests cover this combined workload, persistent visual IDs, fixed drop positions and resource accounting.
+
+## First household and food supply
+
+The existing worker belongs to **Home 1**, the coastal farm. Press **H** or **Supply home** to place a standing supply order. It can be ordered before planting; it waits for actual **stored grain**, and does not create or spend seed, timber, wool or grain merely for placing the order. Repeating H does not queue duplicate deliveries. Stored food supply has priority over starting a new production job, while the current task and cargo delivery always finish first.
+
+The same worker collects one stored sack at a time, carries it along the clear southern approach to the house door, unloads into the visible wooden pantry rack, and returns to the shared store. Its location changes **shared store → carried → owned home pantry → consumed**. It is never available in both inventories, and can only be used by its recorded household ID. The same persistent grain entities represent these locations; used sacks are hidden rather than replaced or respawned.
+
+The household's ration clock starts **only after the first real delivery**. It uses one pantry unit every **40 simulation seconds**, with the HUD showing remaining pantry units, total food used, missed ration intervals and time to the next use. If the pantry is empty at a due interval, the household reports **needs food**; stock never becomes negative, and no substitute material is eaten. Grain still on the field, in the shared store or carried by the worker cannot be consumed. Tab and T/Y do not reset or speed up this clock. The toolbar wraps into two rows so H remains clickable; the reserved UI area does not select trees through the buttons.
+
+This is a foundation for household ownership and demand, not a complete family simulation. There is one home and one resident worker, with no added family NPCs, autonomous household economy, mortality, work penalties, cooking, milling, baking, trade or interiors. Grain units stand in for prepared food; direct grain-to-ration use and the 40-second period are technical abstractions, not historical diets or household sizes. The field still has only one crop cycle: it can supply four total grain units, so this session's food eventually runs out. Replanting/seed reservation and further households remain later work. Without H, the earlier crop/wool/timber smoke tests retain their original stock outcomes.
+
+Screenshots: [waiting supply order](docs/screenshots/household-supply-order.png), [delivered pantry and used food](docs/screenshots/household-pantry.png), [same counters in first person](docs/screenshots/household-first-person.png), and [empty pantry after use](docs/screenshots/household-empty.png).
+
+### Household smoke test
+
+1. In a fresh session, press H twice. Verify zero pantry units and zero used food; no inventory should appear while the supply order waits.
+2. Press O to sow. At **ripe**, press R. Follow sacks from the field to the shared store and then, one at a time, to the door-side pantry. Seed is not used as household food.
+3. Switch Tab while food is carried. The worker ID/home membership, sack and both inventory counts must persist. Pause the presentation sun with T; crop and food clocks continue.
+4. After the first delivery, wait forty simulation seconds. A delivered unit disappears and **food used** increases. Across the whole harvest, grain on ground + carried + shared store + owned pantry + consumed must total four once reaping is complete.
+5. After all four units are used, watch **needs food** and missed intervals increase without negative inventory or extra sacks. H cannot refill the pantry without a real source. Current timber/crop/sheep jobs still work; mixed workloads and the return path to the shared store are covered by automated tests.
 
 ## Coastal visual pass (milestone 3)
 

@@ -3,7 +3,7 @@ use crate::{
     camera::{CameraMode, CameraRig},
     farming::{GrainLocation, SEED_UNITS, SeedLocation},
     livestock::{SHEEP_COUNT, WoolLocation},
-    orders::{OrderButton, OrderInput, OrderState},
+    orders::{ORDER_PANEL_BOTTOM, ORDER_PANEL_HEIGHT, OrderButton, OrderInput, OrderState},
     simulation::{
         BUILD_COST, BUILD_SITE, LogLocation, STOCKPILE, Settlement, SimulationClock, TOTAL_LOGS,
         TREE_POSITIONS, Task, Worker, ground_log_position,
@@ -190,8 +190,11 @@ fn setup(
             Node {
                 position_type: PositionType::Absolute,
                 left: px(20),
-                bottom: px(12),
-                height: px(52),
+                right: px(20),
+                bottom: px(ORDER_PANEL_BOTTOM),
+                height: px(ORDER_PANEL_HEIGHT),
+                flex_wrap: FlexWrap::Wrap,
+                row_gap: px(8),
                 column_gap: px(8),
                 align_items: AlignItems::Center,
                 ..default()
@@ -208,6 +211,7 @@ fn setup(
                 ("O: Sow field", OrderButton::Sow),
                 ("R: Reap crop", OrderButton::Reap),
                 ("C: Shear sheep", OrderButton::Shear),
+                ("H: Supply home", OrderButton::SupplyHome),
             ] {
                 panel
                     .spawn((
@@ -261,7 +265,14 @@ fn sync_worker(
         t.translation = Vec3::new(w.position.x, 0.9, w.position.y);
     }
     for (mut axe, mut visible) in &mut axes {
-        *visible = if w.task.tending_sheep()
+        *visible = if matches!(
+            w.task,
+            Task::ToFoodStore
+                | Task::LoadingFood
+                | Task::ToHome
+                | Task::UnloadingFood
+                | Task::FromHome
+        ) || w.task.tending_sheep()
             || matches!(
                 w.task,
                 Task::ToFarmGateway
@@ -413,16 +424,17 @@ fn hud(
         "not ordered"
     };
     let controls = if rig.mode == CameraMode::Strategy {
-        "WASD orbit | Q/E zoom | Arrows pan | Click tree / 1-3 select | F harvest | B build | O sow | R reap | C shear | Tab walk | Esc quit"
+        "WASD orbit | Q/E zoom | Arrows pan | Click tree / 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | Tab walk | Esc quit"
     } else if rig.captured {
-        "WASD walk | Mouse look | 1-3 select | F harvest | B build | O sow | R reap | C shear | Tab strategy | Esc release mouse"
+        "WASD walk | Mouse look | 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | Tab strategy | Esc release mouse"
     } else {
         "Click to capture mouse | Tab / Esc strategy (simulation keeps running)"
     };
     for mut text in &mut texts {
         *text = Text::new(format!(
-            "hafthiWorld | {mode} | Simulation {:.1}s\nWorker {id:?}: {:?} | Carrying log: {} | Tree {}: {tree_status}\nLogs: in trees {} | ground {} | carried {} | stored {} | installed {}/{}\nTimber rack: {build}\nCrop: {} {:.0}% | seeds stored {} / carried {} / used {}\nGrain: field {} | carried {} | stored {}\nSheep shorn {}/{} | Wool: fleece {} | ground {} | carried {} | stored {}\n{}\n{controls}",
+            "hafthiWorld | {mode} | Simulation {:.1}s\nWorker {id:?} (home {}): {:?} | Carrying log: {} | Tree {}: {tree_status}\nLogs: in trees {} | ground {} | carried {} | stored {} | installed {}/{}\nTimber rack: {build}\nCrop: {} {:.0}% | seeds stored {} / carried {} / used {}\nGrain: field {} | carried {} | stored {}\nSheep shorn {}/{} | Wool: fleece {} | ground {} | carried {} | stored {}\nHome {}: {} | pantry {} | food used {} | missed {} | next use {:.0}s\n{}\n{controls}",
             clock.0,
+            w.home_id,
             w.task,
             w.carrying.is_some(),
             orders.selected + 1,
@@ -458,6 +470,13 @@ fn hud(
             s.flock.count(WoolLocation::Ground),
             s.flock.count(WoolLocation::Carried),
             s.flock.count(WoolLocation::Stored),
+            s.household.id,
+            s.household
+                .status(s.farm.count(GrainLocation::Home(s.household.id))),
+            s.farm.count(GrainLocation::Home(s.household.id)),
+            s.household.food_used,
+            s.household.missed_rations,
+            s.household.next_use(),
             orders.feedback
         ));
     }

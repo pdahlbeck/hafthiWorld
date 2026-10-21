@@ -1,6 +1,7 @@
 //! One world and simulation, observed through two camera modes.
 mod camera;
 mod farming;
+mod household;
 mod livestock;
 mod orders;
 mod performance;
@@ -52,6 +53,7 @@ fn main() -> AppExit {
             presentation::PresentationPlugin,
             farming::FarmingPlugin,
             livestock::LivestockPlugin,
+            household::HouseholdPlugin,
             performance::PerformancePlugin,
         ))
         .run()

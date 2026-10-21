@@ -16,3 +16,7 @@ The added field is an illustrative grain plot, not an identified archaeological 
 ## First sheep slice
 
 The roadmap's sheep-to-wool chain is represented by two generic stylized animals. No specific historic breed, modern Gotland sheep ancestry, stocking density, pasture requirement, shearing technology, yield or frequency is claimed. Grazing paths, the three-sided wooden pen, holding animals in place when ordered, the reduced shorn coat and two-unit fleece are gameplay/art interpretations. Four-second clipping is a technical demonstration, not a husbandry estimate. There is no simulated feed consumption, animal health, reproduction or wool regrowth yet. No third-party animal meshes or textures are used.
+
+## First household supply slice
+
+Home 1 is a single abstract ownership/demand unit attached to the existing worker and house, not a reconstruction of a named Gotland family, household size or land tenure system. The visible door-side pantry rack is a game affordance, not a documented Viking Age storage practice. Grain-to-ration conversion bypasses processing and does not claim that raw grain was eaten as a complete diet. Four grain units, forty-second ration intervals, delayed clock start and shortage counters are technical rules. No family population, nutrition, cooking, starvation deaths, seasons or additional household autonomy is asserted.
