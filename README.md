@@ -1,6 +1,6 @@
 # hafthiWorld
 
-Rust + Bevy 0.20 settlement simulation inspired by Viking Age Gotland. The second scoped milestone from [issue #1](https://github.com/pdahlbeck/hafthiWorld/issues/1) adds a playable resource chain: **order tree felling → carry logs to storage → carry stored timber to a construction site → finish a timber rack**. Strategy and first person observe the same running ECS world. Milestone 3 adds an original procedural coastal visual pass and portable performance instrumentation. The single worker, three finite trees and material-backed timber rack remain the same shared simulation in both views.
+Rust + Bevy 0.20 settlement simulation inspired by Viking Age Gotland. The second scoped milestone from [issue #1](https://github.com/pdahlbeck/hafthiWorld/issues/1) adds a playable resource chain: **order tree felling → carry logs to storage → carry stored timber to a construction site → finish a timber rack**. Strategy and first person observe the same running ECS world. Milestone 3 adds an original procedural coastal visual pass and portable performance instrumentation. The next scoped slice adds one finite, player-ordered crop cycle using the same worker and storage. The single worker, three finite trees and material-backed timber rack remain the same shared simulation in both views.
 
 ## Run
 
@@ -28,6 +28,7 @@ macOS uses Metal; Linux needs a working graphics driver/display and Bevy's nativ
 | Left click | Select a tree crown/stump, or use the order buttons | Capture mouse after release/focus loss |
 | 1 / 2 / 3 | Select tree | Select tree while mouse is captured |
 | F | Order selected tree felled | Same order while mouse is captured |
+| O / R | Order sowing / reap the ripe field | Same orders while mouse is captured |
 | B | Order the fixed timber rack (two logs) | Same order while mouse is captured |
 | Escape | Quit gracefully | Release mouse; press again to return to strategy |
 
@@ -41,14 +42,15 @@ Press **B** or **Build rack** to order the single predefined timber rack beside 
 
 The worker prioritizes supplying an ordered rack from available storage, then loose logs, then queued trees. Already-started work finishes before the next task is chosen. The HUD exposes the persistent worker ID, task, selected tree, time and material locations. Every unit is in exactly one state: **in tree, on ground, carried, stored or installed**; their sum stays six. Installed units are represented by the rack structure rather than duplicate log meshes. Camera switching does not spawn replacement entities or reset tasks, orders or stocks.
 
-This scope has one worker, three fixed trees, one material and one fixed building site. It does not include free placement, advanced pathfinding, multiple workers, replanting, durability, construction recipes, households or saved games. Routes are authored to stay clear of the existing house/limestone footprint; the small rack is an open prototype frame without its own collision. Restarting resets the session. Tree yield, rack cost, dimensions and work durations are technical/art choices, not historical measurements.
+The timber chain has one worker, three fixed trees, one timber material and one fixed building site. The crop slice below shares that same worker and adds separate seed/grain accounting. It does not include free placement, advanced pathfinding, multiple workers, replanting, durability, construction recipes, households or saved games. Routes are authored to stay clear of the existing house/limestone footprint; the small rack is an open prototype frame without its own collision. Restarting resets the session. Tree yield, rack cost, dimensions and work durations are technical/art choices, not historical measurements.
 
 ## Architecture
 
 - `world.rs`: deterministic irregular shore, shallow sea bands and wave lines, shared grass patches with wind, pine group, timber farm silhouette, sunlight/sky/fog and shared shore/obstacle queries.
 - `performance.rs`: low/high render settings, rolling CPU wall-frame statistics and a timed CSV benchmark. It never changes settlement resources or work.
 - `camera.rs`: explicit camera-mode resource, independent strategy/first-person poses, collision-aware movement, focus and cursor policy. It never mutates simulation.
-- `simulation.rs`: fixed-step worker tasks, finite tree/log states, construction state and clock. Pure work progression has no camera/rendering/input dependency.
+- `simulation.rs`: fixed-step worker tasks, finite tree/log states, construction state, field labour/transport and clock. One persistent worker handles both timber and farming.
+- `farming.rs`: one finite crop cycle, seed/grain accounting and persistent field/crop/sack visuals. It reads the shared settlement/worker state; it never advances work in rendering. Pure work progression has no camera/rendering/input dependency.
 - `orders.rs`: selection, tree ray picking, keyboard/native UI button orders and focus/mode guards. It records intent; it never moves workers or grants material.
 - `presentation.rs`: persistent worker/tree/log entities, axe motion, selection marker, construction parts, native Bevy 0.20 buttons and HUD reading shared state in `Update`. It does not advance the economy.
 - `main.rs`: plugin composition and window setup.
@@ -65,7 +67,7 @@ cargo clippy --locked -- -D warnings
 cargo build --locked
 ```
 
-Fifteen tests cover the complete material chain, waiting for missing timber, idempotent orders, finite yields, frame partitioning, authored traversable routes, preserved entity identities across camera changes, clickable-button activation, keyboard orders in both modes, input suppression on focus loss/mouse release, retained camera poses and existing collision. New checks cover shore/pine collision, the daylight brightness range, CLI validation and slow-frame percentiles.
+Twenty-one tests cover the complete material chain, waiting for missing timber, idempotent orders, finite yields, frame partitioning, authored traversable routes, preserved entity identities across camera changes, clickable-button activation, keyboard orders in both modes, input suppression on focus loss/mouse release, retained camera poses and existing collision. Checks also cover shore/pine collision, daylight, benchmark arguments and slow-frame percentiles. Crop tests cover seed use, premature/repeated orders, physical delivery, mixed timber/farming routes, frame partitions, focus guards and persistent field/cargo entities across camera changes.
 
 Linux software-Vulkan smoke captures for this milestone are in `docs/screenshots/milestone2-*.png`. They document functionality; macOS/Metal performance still needs desktop testing.
 
@@ -78,6 +80,26 @@ Linux software-Vulkan smoke captures for this milestone are in `docs/screenshots
 5. Return with Tab: the original strategy pose returns. Try ordering **F/B** from first person while the mouse is captured. Escape releases the mouse; F/B should then do nothing. Focus loss must release the mouse and suppress orders until recaptured.
 6. Reissue harvest for the felled tree and build for the completed rack. No additional logs or costs should appear. Select the other two trees and order harvest; after all work finishes, **stored = 4, installed = 2**, the sum of all locations remains six, and the worker idles.
 7. Existing walking/house/limestone/shore collision, camera pan/orbit/zoom and graceful Escape/window-close exit should continue to work.
+
+## First crop cycle (next scoped milestone)
+
+A single tilled plot lies southeast of the house. Press **O** or **Sow field**. The existing worker collects the four initial seed units from the stockpile, carries their sack around the house via the southern approach, and spends four simulation seconds sowing. Seeds move from **stored → carried → used** exactly once. Until that actual work completes, the field cannot grow.
+
+The crop then grows for **30 simulation seconds**, visibly rising and changing from green to gold. It does not reap itself. Wait for **ripe** in the HUD and press **R** or **Reap crop**; premature orders are rejected with feedback. After walking back and four seconds of reaping, the worker leaves four finite grain sacks at the field and carries each separately to the stockpile. Each is either **unproduced, on the field, carried or stored**. The HUD shows those material counts separately from timber. No grain is credited merely for issuing an order, and repeating O/R cannot recreate seed, regrow the field or duplicate grain.
+
+Timber delivery/building, loose logs and ordered trees retain their existing priority; grain hauling and field work follow. A current task completes before another is accepted. Farm travel uses the southern stockpile approach rather than crossing the house. Crop growth advances with the fixed simulation even when the worker is busy elsewhere or either camera is active. **T/Y change presentation sunlight only** and never speed up, pause or reset crops. One sow/harvest cycle is available per session; restarting resets it.
+
+This is one field and one worker, with illustrative grain geometry and arbitrary seed/yield units. It does not yet implement species-specific cultivation, seed saving/replanting, food consumption, seasons, livestock, households, free field placement or saved games. The short growth/work durations are testing choices, not agricultural or historical measurements. Earlier milestone-3 benchmark results remain a record of that earlier scene; no new hardware performance claim is made for the crop slice.
+
+Screenshots: [ripe plot in strategy](docs/screenshots/milestone4-ripe-strategy.png), [the same plot in first person](docs/screenshots/milestone4-ripe-first-person.png), and [completed delivery](docs/screenshots/milestone4-stored.png).
+
+### Crop smoke test
+
+1. Start a fresh session. Verify four seed units stored, no grain produced and an unplanted field. Wait: nothing should grow automatically.
+2. Press O twice. Follow the same worker carry the seed sack, sow, and return through the southern approach. The initial stock moves to carried, then used; it must not be charged twice.
+3. Press R before the crop is ripe: no harvest should start. Pause sunlight with T, advance its hour with Y and switch cameras with Tab. Crop growth must continue, with the same worker/entity IDs and stocks.
+4. At ripe, press R twice. Observe reaping, ground sacks, one carried sack at a time, and four sacks eventually stored. Repeated O/R after completion must not add resources.
+5. Repeat while also ordering tree felling and the rack. Timber must still produce six total units, install two and store four after all three trees are harvested; grain remains exactly four in storage. The automated test also checks every sampled route stays walkable.
 
 ## Coastal visual pass (milestone 3)
 

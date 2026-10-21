@@ -1,4 +1,5 @@
 //! Fixed-step logistics, independent of cameras, input and rendering.
+use crate::farming::{CropPhase, FIELD_WORK, Farm, GrainLocation, SeedLocation, grain_position};
 use bevy::prelude::*;
 
 pub const STOCKPILE: Vec2 = Vec2::new(-2.5, 3.5);
@@ -49,6 +50,7 @@ pub struct Settlement {
     pub trees: [Tree; TREE_POSITIONS.len()],
     pub logs: [LogLocation; TOTAL_LOGS],
     pub construction: Construction,
+    pub farm: Farm,
 }
 impl Default for Settlement {
     fn default() -> Self {
@@ -56,6 +58,7 @@ impl Default for Settlement {
             trees: [Tree::default(); TREE_POSITIONS.len()],
             logs: [LogLocation::InTree; TOTAL_LOGS],
             construction: Construction::default(),
+            farm: Farm::default(),
         }
     }
 }
@@ -105,12 +108,29 @@ pub enum Task {
     ToSite,
     Installing,
     Assembling,
+    ToFarmGateway,
+    LoadingSeeds,
+    ToField,
+    Sowing,
+    Reaping,
+    LoadingGrain,
+    DeliveringGrain,
+    StoringGrain,
+    FromField,
+}
+#[derive(Debug, Clone, Copy)]
+enum FarmJob {
+    Sow,
+    Reap,
+    Haul,
 }
 #[derive(Component, Debug)]
 pub struct Worker {
     pub position: Vec2,
     pub task: Task,
     pub carrying: Option<usize>,
+    pub carrying_grain: Option<usize>,
+    farm_job: FarmJob,
     target: usize,
     handling: f32,
     building_delivery: bool,
@@ -121,6 +141,8 @@ impl Default for Worker {
             position: STOCKPILE,
             task: Task::Idle,
             carrying: None,
+            carrying_grain: None,
+            farm_job: FarmJob::Sow,
             target: 0,
             handling: 0.0,
             building_delivery: false,
@@ -164,9 +186,36 @@ impl Worker {
             self.start(Task::ToTree);
             return true;
         }
-        false
+        let farm = &settlement.farm;
+        if let Some(grain) = farm.grain.iter().position(|&g| g == GrainLocation::Ground) {
+            self.target = grain;
+            self.farm_job = FarmJob::Haul;
+        } else if farm.phase == CropPhase::SowOrdered && farm.seeds == SeedLocation::Stored {
+            self.farm_job = FarmJob::Sow;
+        } else if farm.phase == CropPhase::Ripe && farm.harvest_ordered {
+            self.farm_job = FarmJob::Reap;
+        } else {
+            return false;
+        }
+        self.start(Task::ToFarmGateway);
+        true
     }
     pub fn advance(&mut self, mut seconds: f32, settlement: &mut Settlement) {
+        if !seconds.is_finite() || seconds <= 0.0 {
+            return;
+        }
+        while seconds > 0.0 {
+            if self.task == Task::Idle && !self.choose_task(settlement) {
+                settlement.farm.grow(seconds as f64);
+                return;
+            }
+            let step = seconds.min(1.0 / 64.0);
+            settlement.farm.grow(step as f64);
+            self.advance_work(step, settlement);
+            seconds -= step;
+        }
+    }
+    fn advance_work(&mut self, mut seconds: f32, settlement: &mut Settlement) {
         if !seconds.is_finite() || seconds <= 0.0 {
             return;
         }
@@ -177,12 +226,26 @@ impl Worker {
                         break;
                     }
                 }
-                Task::ToTree | Task::ToLog | Task::ToStockpile | Task::ToSite => {
+                Task::ToTree
+                | Task::ToLog
+                | Task::ToStockpile
+                | Task::ToSite
+                | Task::ToFarmGateway
+                | Task::ToField
+                | Task::DeliveringGrain
+                | Task::FromField => {
                     let goal = match self.task {
                         Task::ToTree => TREE_POSITIONS[self.target] + Vec2::new(0.65, 0.45),
                         Task::ToLog if self.building_delivery => STOCKPILE,
                         Task::ToLog => ground_log_position(self.target),
-                        Task::ToStockpile => STOCKPILE,
+                        Task::ToStockpile
+                        | Task::ToFarmGateway
+                        | Task::DeliveringGrain
+                        | Task::FromField => STOCKPILE,
+                        Task::ToField if matches!(self.farm_job, FarmJob::Haul) => {
+                            grain_position(self.target)
+                        }
+                        Task::ToField => FIELD_WORK,
                         _ => BUILD_WORK,
                     };
                     let delta = goal - self.position;
@@ -194,6 +257,17 @@ impl Worker {
                     self.position = goal;
                     seconds -= travel;
                     self.start(match self.task {
+                        Task::ToFarmGateway if matches!(self.farm_job, FarmJob::Sow) => {
+                            Task::LoadingSeeds
+                        }
+                        Task::ToFarmGateway => Task::ToField,
+                        Task::ToField => match self.farm_job {
+                            FarmJob::Sow => Task::Sowing,
+                            FarmJob::Reap => Task::Reaping,
+                            FarmJob::Haul => Task::LoadingGrain,
+                        },
+                        Task::DeliveringGrain => Task::StoringGrain,
+                        Task::FromField => Task::Idle,
                         Task::ToTree => Task::Felling,
                         Task::ToLog => Task::Loading,
                         Task::ToStockpile => Task::Unloading,
@@ -205,6 +279,7 @@ impl Worker {
                     let duration = match self.task {
                         Task::Felling => FELL_SECONDS,
                         Task::Assembling => BUILD_SECONDS,
+                        Task::Sowing | Task::Reaping => 4.0,
                         _ => HANDLING_SECONDS,
                     };
                     let used = seconds.min(duration - self.handling);
@@ -214,6 +289,35 @@ impl Worker {
                         break;
                     }
                     match self.task {
+                        Task::LoadingSeeds => {
+                            settlement.farm.seeds = SeedLocation::Carried;
+                            self.start(Task::ToField);
+                        }
+                        Task::Sowing => {
+                            settlement.farm.seeds = SeedLocation::Sown;
+                            settlement.farm.phase = CropPhase::Growing;
+                            self.start(Task::FromField);
+                        }
+                        Task::Reaping => {
+                            settlement.farm.phase = CropPhase::Harvested;
+                            settlement.farm.grain.fill(GrainLocation::Ground);
+                            self.target = 0;
+                            self.farm_job = FarmJob::Haul;
+                            self.start(Task::ToField);
+                        }
+                        Task::LoadingGrain => {
+                            settlement.farm.grain[self.target] = GrainLocation::Carried;
+                            self.carrying_grain = Some(self.target);
+                            self.start(Task::DeliveringGrain);
+                        }
+                        Task::StoringGrain => {
+                            let grain = self
+                                .carrying_grain
+                                .take()
+                                .expect("grain delivery requires cargo");
+                            settlement.farm.grain[grain] = GrainLocation::Stored;
+                            self.start(Task::Idle);
+                        }
                         Task::Felling => {
                             settlement.trees[self.target].felled = true;
                             for log in
