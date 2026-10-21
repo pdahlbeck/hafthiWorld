@@ -212,6 +212,7 @@ fn setup(
                 ("R: Reap crop", OrderButton::Reap),
                 ("C: Shear sheep", OrderButton::Shear),
                 ("H: Supply home", OrderButton::SupplyHome),
+                ("V: Save seed", OrderButton::ReserveSeed),
             ] {
                 panel
                     .spawn((
@@ -275,7 +276,9 @@ fn sync_worker(
         ) || w.task.tending_sheep()
             || matches!(
                 w.task,
-                Task::ToFarmGateway
+                Task::ToSeedStore
+                    | Task::PreparingSeeds
+                    | Task::ToFarmGateway
                     | Task::LoadingSeeds
                     | Task::ToField
                     | Task::Sowing
@@ -424,15 +427,15 @@ fn hud(
         "not ordered"
     };
     let controls = if rig.mode == CameraMode::Strategy {
-        "WASD orbit | Q/E zoom | Arrows pan | Click tree / 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | Tab walk | Esc quit"
+        "WASD orbit | Q/E zoom | Arrows pan | Click tree / 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | V seeds | Tab walk | Esc quit"
     } else if rig.captured {
-        "WASD walk | Mouse look | 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | Tab strategy | Esc release mouse"
+        "WASD walk | Mouse look | 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | V seeds | Tab strategy | Esc release mouse"
     } else {
         "Click to capture mouse | Tab / Esc strategy (simulation keeps running)"
     };
     for mut text in &mut texts {
         *text = Text::new(format!(
-            "hafthiWorld | {mode} | Simulation {:.1}s\nWorker {id:?} (home {}): {:?} | Carrying log: {} | Tree {}: {tree_status}\nLogs: in trees {} | ground {} | carried {} | stored {} | installed {}/{}\nTimber rack: {build}\nCrop: {} {:.0}% | seeds stored {} / carried {} / used {}\nGrain: field {} | carried {} | stored {}\nSheep shorn {}/{} | Wool: fleece {} | ground {} | carried {} | stored {}\nHome {}: {} | pantry {} | food used {} | missed {} | next use {:.0}s\n{}\n{controls}",
+            "hafthiWorld | {mode} | Simulation {:.1}s\nWorker {id:?} (home {}): {:?} | Carrying log: {} | Tree {}: {tree_status}\nLogs: in trees {} | ground {} | carried {} | stored {} | installed {}/{}\nTimber rack: {build}\nCrop: {} {:.0}% | seeds stored {} / carried {} / used {}\nGrain: field {} | carried {} | stored {} | harvests {} | seed batches saved {} ({})\nSheep shorn {}/{} | Wool: fleece {} | ground {} | carried {} | stored {}\nHome {}: {} | pantry {} | food used {} | missed {} | next use {:.0}s\n{}\n{controls}",
             clock.0,
             w.home_id,
             w.task,
@@ -464,6 +467,13 @@ fn hud(
             s.farm.count(GrainLocation::Ground),
             s.farm.count(GrainLocation::Carried),
             s.farm.count(GrainLocation::Stored),
+            s.farm.harvests,
+            s.farm.seed_batches_saved,
+            if s.farm.reserve_ordered {
+                "saving on"
+            } else {
+                "V to save"
+            },
             s.flock.sheep.iter().filter(|s| s.shorn).count(),
             SHEEP_COUNT,
             s.flock.count(WoolLocation::Fleece),

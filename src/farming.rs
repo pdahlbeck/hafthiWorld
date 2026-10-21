@@ -1,4 +1,4 @@
-//! One finite crop cycle. The field reads the same worker and settlement in both views.
+//! Repeatable crop cycles with physical seed reservation and bounded sack slots. The field reads the same worker and settlement in both views.
 use crate::simulation::{STOCKPILE, Settlement, Worker};
 use bevy::prelude::*;
 
@@ -42,6 +42,7 @@ pub enum GrainLocation {
     Stored,
     Home(u32),
     Consumed(u32),
+    SavedSeed,
 }
 #[derive(Debug)]
 pub struct Farm {
@@ -50,6 +51,10 @@ pub struct Farm {
     pub growth: f64,
     pub harvest_ordered: bool,
     pub grain: [GrainLocation; GRAIN_UNITS],
+    pub reserve_ordered: bool,
+    pub harvests: u64,
+    pub seed_batches_saved: u64,
+    seed_saved_this_harvest: bool,
 }
 impl Default for Farm {
     fn default() -> Self {
@@ -59,22 +64,79 @@ impl Default for Farm {
             growth: 0.0,
             harvest_ordered: false,
             grain: [GrainLocation::Unproduced; GRAIN_UNITS],
+            reserve_ordered: false,
+            harvests: 0,
+            seed_batches_saved: 0,
+            seed_saved_this_harvest: false,
         }
     }
 }
 impl Farm {
     pub fn request_sow(&mut self) -> bool {
-        if self.phase != CropPhase::Fallow || self.seeds != SeedLocation::Stored {
+        if !matches!(self.phase, CropPhase::Fallow | CropPhase::Harvested)
+            || self.seeds != SeedLocation::Stored
+        {
             return false;
         }
         self.phase = CropPhase::SowOrdered;
+        self.growth = 0.0;
+        self.harvest_ordered = false;
         true
     }
     pub fn request_reap(&mut self) -> bool {
-        if self.phase != CropPhase::Ripe || self.harvest_ordered {
+        if self.phase != CropPhase::Ripe || self.harvest_ordered || !self.previous_grain_resolved()
+        {
             return false;
         }
         self.harvest_ordered = true;
+        true
+    }
+    // Reuse only spent sack slots. Live stocks remain intact during the next sow/growth.
+    pub fn previous_grain_resolved(&self) -> bool {
+        self.grain.iter().all(|g| {
+            matches!(
+                g,
+                GrainLocation::Unproduced | GrainLocation::Consumed(_) | GrainLocation::SavedSeed
+            )
+        })
+    }
+    pub fn request_reserve(&mut self) -> bool {
+        if self.reserve_ordered {
+            return false;
+        }
+        self.reserve_ordered = true;
+        true
+    }
+    pub fn seed_candidate(&self) -> Option<usize> {
+        if !self.reserve_ordered
+            || self.harvests == 0
+            || self.seed_saved_this_harvest
+            || self.seeds != SeedLocation::Sown
+        {
+            return None;
+        }
+        self.grain.iter().position(|&g| g == GrainLocation::Stored)
+    }
+    pub fn save_seed(&mut self, index: usize) -> bool {
+        if self.seed_candidate() != Some(index) {
+            return false;
+        }
+        self.grain[index] = GrainLocation::SavedSeed;
+        self.seeds = SeedLocation::Stored;
+        self.seed_saved_this_harvest = true;
+        self.seed_batches_saved += 1;
+        true
+    }
+    pub fn reap(&mut self) -> bool {
+        if self.phase != CropPhase::Ripe || !self.harvest_ordered || !self.previous_grain_resolved()
+        {
+            return false;
+        }
+        self.grain.fill(GrainLocation::Ground);
+        self.phase = CropPhase::Harvested;
+        self.harvest_ordered = false;
+        self.harvests += 1;
+        self.seed_saved_this_harvest = false;
         true
     }
     pub fn grow(&mut self, seconds: f64) {
@@ -231,7 +293,9 @@ fn sync(
             }
             FarmVisual::Grain(i) => {
                 let p = match farm.grain[i] {
-                    GrainLocation::Unproduced | GrainLocation::Consumed(_) => {
+                    GrainLocation::Unproduced
+                    | GrainLocation::Consumed(_)
+                    | GrainLocation::SavedSeed => {
                         *visible = Visibility::Hidden;
                         continue;
                     }
@@ -297,6 +361,236 @@ mod tests {
             w.position,
             w.task
         );
+    }
+    #[test]
+    fn seed_reservation_needs_real_stored_grain_and_saves_only_once_per_harvest() {
+        let mut f = Farm::default();
+        assert!(f.request_reserve());
+        assert!(!f.request_reserve());
+        assert_eq!(f.seed_candidate(), None);
+        assert!(!f.save_seed(usize::MAX));
+        assert!(f.request_sow());
+        f.seeds = SeedLocation::Sown;
+        f.phase = CropPhase::Ripe;
+        assert!(f.request_reap());
+        assert!(f.reap());
+        assert_eq!(f.seed_candidate(), None); // Grain on the ground cannot become seed.
+        f.grain[0] = GrainLocation::Stored;
+        assert!(!f.save_seed(1));
+        assert!(f.save_seed(0));
+        assert_eq!(f.count(GrainLocation::SavedSeed), 1);
+        assert_eq!(f.seeds, SeedLocation::Stored);
+        assert_eq!(f.seed_batches_saved, 1);
+        assert!(f.request_sow());
+        assert_eq!(f.growth, 0.0);
+        f.seeds = SeedLocation::Sown;
+        f.grain[1] = GrainLocation::Stored;
+        assert!(!f.save_seed(1)); // New sowing must not save a second sack of the old crop.
+        assert_eq!(f.seed_batches_saved, 1);
+        assert_eq!(f.grain[1], GrainLocation::Stored);
+    }
+    #[test]
+    fn reaping_never_overwrites_live_grain_from_the_previous_crop() {
+        for location in [
+            GrainLocation::Ground,
+            GrainLocation::Carried,
+            GrainLocation::Stored,
+            GrainLocation::Home(1),
+        ] {
+            let mut f = Farm::default();
+            f.phase = CropPhase::Ripe;
+            f.grain[0] = location;
+            assert!(!f.request_reap());
+            f.harvest_ordered = true; // Even an obsolete order cannot bypass the safeguard.
+            let before = f.grain;
+            assert!(!f.reap());
+            assert_eq!(f.grain, before);
+            assert_eq!(f.harvests, 0);
+            f.harvest_ordered = false;
+            f.grain[0] = GrainLocation::Consumed(1);
+            assert!(f.request_reap());
+            assert!(f.reap());
+            assert_eq!(f.count(GrainLocation::Ground), GRAIN_UNITS);
+            assert!(!f.reap());
+        }
+    }
+    fn repeat_orders(s: &mut Settlement, max_harvests: u64) {
+        if s.farm.harvests < max_harvests {
+            if matches!(s.farm.phase, CropPhase::Fallow | CropPhase::Harvested) {
+                s.farm.request_sow();
+            }
+            if s.farm.phase == CropPhase::Ripe {
+                s.farm.request_reap();
+            }
+        }
+    }
+    fn repeat_balance(s: &Settlement, w: &Worker) {
+        let live = s
+            .farm
+            .grain
+            .iter()
+            .filter(|g| {
+                matches!(
+                    g,
+                    GrainLocation::Ground
+                        | GrainLocation::Carried
+                        | GrainLocation::Stored
+                        | GrainLocation::Home(_)
+                )
+            })
+            .count();
+        assert_eq!(
+            s.farm.harvests * GRAIN_UNITS as u64,
+            live as u64 + s.household.food_used + s.farm.seed_batches_saved
+        );
+        assert_eq!(
+            s.farm.count(GrainLocation::Carried),
+            usize::from(w.carrying_grain.is_some())
+        );
+        assert!(
+            usize::from(w.carrying_grain.is_some())
+                + usize::from(w.carrying.is_some())
+                + usize::from(w.carrying_wool.is_some())
+                <= 1
+        );
+        assert!(
+            crate::world::walkable(w.position),
+            "blocked {:?} at {:?}",
+            w.task,
+            w.position
+        );
+    }
+    #[test]
+    fn three_real_harvests_supply_nine_meals_and_three_seed_batches_without_losing_material() {
+        let mut s = Settlement::default();
+        let mut w = Worker::default();
+        s.farm.request_reserve();
+        s.household.request_supply();
+        s.request_build();
+        for i in 0..3 {
+            s.request_harvest(i);
+        }
+        s.flock.request_shear();
+        let mut saved_before_food = false;
+        let mut growing_with_old_food = false;
+        let mut waiting_for_old_food = false;
+        for _ in 0..14000 {
+            repeat_orders(&mut s, 3);
+            w.advance(0.1, &mut s);
+            repeat_balance(&s, &w);
+            if s.farm.seed_batches_saved == 1 && s.household.food_used == 0 {
+                saved_before_food = true;
+            }
+            growing_with_old_food |=
+                s.farm.phase == CropPhase::Growing && !s.farm.previous_grain_resolved();
+            waiting_for_old_food |= s.farm.phase == CropPhase::Ripe
+                && !s.farm.previous_grain_resolved()
+                && !s.farm.harvest_ordered;
+        }
+        assert!(saved_before_food && growing_with_old_food && waiting_for_old_food);
+        assert_eq!(s.farm.harvests, 3);
+        assert_eq!(s.farm.seed_batches_saved, 3);
+        assert_eq!(s.household.food_used, 9);
+        assert_eq!(s.farm.seeds, SeedLocation::Stored);
+        assert!(s.farm.previous_grain_resolved());
+        assert_eq!(w.task, Task::Idle);
+        assert!(s.construction.complete);
+        assert_eq!(s.installed(), BUILD_COST);
+        assert_eq!(s.stored(), TOTAL_LOGS - BUILD_COST);
+        assert_eq!(
+            s.flock.count(crate::livestock::WoolLocation::Stored),
+            crate::livestock::WOOL_UNITS
+        );
+    }
+    #[test]
+    fn no_reserve_order_leaves_all_four_sacks_for_food_and_no_seed_to_replant() {
+        let mut s = Settlement::default();
+        let mut w = Worker::default();
+        s.household.request_supply();
+        for _ in 0..4000 {
+            repeat_orders(&mut s, 2);
+            w.advance(0.1, &mut s);
+            repeat_balance(&s, &w);
+        }
+        assert_eq!(s.household.food_used, 4);
+        assert_eq!(s.farm.harvests, 1);
+        assert_eq!(s.farm.seed_batches_saved, 0);
+        assert!(!s.farm.request_sow());
+        assert!(s.farm.request_reserve());
+        w.advance(100.0, &mut s);
+        assert!(!s.farm.request_sow()); // Consumed food cannot be recovered as seed.
+    }
+    #[test]
+    fn repeated_crops_preserve_worker_field_and_sack_entities_in_both_views() {
+        use bevy::time::TimeUpdateStrategy;
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(TimeUpdateStrategy::ManualDuration(
+                std::time::Duration::from_millis(100),
+            ))
+            .init_resource::<Assets<Mesh>>()
+            .init_resource::<Assets<StandardMaterial>>()
+            .init_resource::<CameraRig>()
+            .add_plugins((SimulationPlugin, FarmingPlugin));
+        app.update();
+        let ids: Vec<_> = app
+            .world_mut()
+            .query_filtered::<Entity, With<FarmVisual>>()
+            .iter(app.world())
+            .collect();
+        let worker = app
+            .world_mut()
+            .query_filtered::<Entity, With<Worker>>()
+            .single(app.world())
+            .unwrap();
+        {
+            let mut s = app.world_mut().resource_mut::<Settlement>();
+            s.farm.request_reserve();
+            s.household.request_supply();
+        }
+        let mut saw_new_growth = false;
+        for frame in 0..5500 {
+            repeat_orders(&mut app.world_mut().resource_mut::<Settlement>(), 2);
+            if frame % 13 == 0 {
+                app.world_mut().resource_mut::<CameraRig>().toggle();
+            }
+            app.update();
+            let s = app.world().resource::<Settlement>();
+            repeat_balance(s, app.world().get::<Worker>(worker).unwrap());
+            if s.farm.harvests == 1 && s.farm.phase == CropPhase::Growing {
+                saw_new_growth = true;
+                for &id in &ids {
+                    if matches!(app.world().get::<FarmVisual>(id), Some(FarmVisual::Crop)) {
+                        assert_eq!(
+                            *app.world().get::<Visibility>(id).unwrap(),
+                            Visibility::Visible
+                        );
+                        assert!(app.world().get::<Transform>(id).unwrap().scale.y <= 1.0);
+                    }
+                }
+            }
+        }
+        assert!(saw_new_growth);
+        let s = app.world().resource::<Settlement>();
+        assert_eq!(s.farm.harvests, 2);
+        assert_eq!(s.household.food_used, 6);
+        assert_eq!(s.farm.seed_batches_saved, 2);
+        assert_eq!(
+            app.world_mut()
+                .query_filtered::<Entity, With<FarmVisual>>()
+                .iter(app.world())
+                .count(),
+            ids.len()
+        );
+        for id in ids {
+            assert!(app.world().get::<FarmVisual>(id).is_some());
+            let expected = if matches!(app.world().get::<FarmVisual>(id), Some(FarmVisual::Seeds)) {
+                Visibility::Visible
+            } else {
+                Visibility::Hidden
+            };
+            assert_eq!(*app.world().get::<Visibility>(id).unwrap(), expected);
+        }
     }
     #[test]
     fn seed_is_carried_then_planted_and_ripe_crop_requires_a_new_order() {

@@ -121,6 +121,8 @@ pub enum Task {
     Assembling,
     ToFarmGateway,
     LoadingSeeds,
+    ToSeedStore,
+    PreparingSeeds,
     ToField,
     Sowing,
     Reaping,
@@ -212,6 +214,11 @@ impl Worker {
         self.handling = 0.0;
     }
     fn choose_task(&mut self, settlement: &Settlement) -> bool {
+        if let Some(grain) = settlement.farm.seed_candidate() {
+            self.target = grain;
+            self.start(Task::ToSeedStore);
+            return true;
+        }
         if settlement.household.supply_ordered
             && self.home_id == settlement.household.id
             && let Some(grain) = settlement
@@ -336,11 +343,12 @@ impl Worker {
                 | Task::FromPasture
                 | Task::FromPastureEdge
                 | Task::DeliveringWool
+                | Task::ToSeedStore
                 | Task::ToFoodStore
                 | Task::ToHome
                 | Task::FromHome => {
                     let goal = match self.task {
-                        Task::ToFoodStore | Task::FromHome => STOCKPILE,
+                        Task::ToSeedStore | Task::ToFoodStore | Task::FromHome => STOCKPILE,
                         Task::ToHome => HOME_DELIVERY,
                         Task::ToPastureGateway | Task::DeliveringWool => STOCKPILE,
                         Task::ToPastureEdge | Task::FromPastureEdge => FIELD_WORK,
@@ -371,6 +379,7 @@ impl Worker {
                     self.position = goal;
                     seconds -= travel;
                     self.start(match self.task {
+                        Task::ToSeedStore => Task::PreparingSeeds,
                         Task::ToFoodStore => Task::LoadingFood,
                         Task::ToHome => Task::UnloadingFood,
                         Task::FromHome => Task::Idle,
@@ -405,7 +414,7 @@ impl Worker {
                     let duration = match self.task {
                         Task::Felling => FELL_SECONDS,
                         Task::Assembling => BUILD_SECONDS,
-                        Task::Sowing | Task::Reaping | Task::Shearing => 4.0,
+                        Task::PreparingSeeds | Task::Sowing | Task::Reaping | Task::Shearing => 4.0,
                         _ => HANDLING_SECONDS,
                     };
                     let used = seconds.min(duration - self.handling);
@@ -415,6 +424,10 @@ impl Worker {
                         break;
                     }
                     match self.task {
+                        Task::PreparingSeeds => {
+                            settlement.farm.save_seed(self.target);
+                            self.start(Task::Idle);
+                        }
                         Task::LoadingFood => {
                             if settlement.farm.grain[self.target] != GrainLocation::Stored {
                                 self.start(Task::Idle);
@@ -464,8 +477,7 @@ impl Worker {
                             self.start(Task::FromField);
                         }
                         Task::Reaping => {
-                            settlement.farm.phase = CropPhase::Harvested;
-                            settlement.farm.grain.fill(GrainLocation::Ground);
+                            assert!(settlement.farm.reap(), "reaping cannot replace live grain");
                             self.target = 0;
                             self.farm_job = FarmJob::Haul;
                             self.start(Task::ToField);
