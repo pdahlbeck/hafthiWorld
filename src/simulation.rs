@@ -1,5 +1,6 @@
 //! Fixed-step logistics, independent of cameras, input and rendering.
 use crate::farming::{CropPhase, FIELD_WORK, Farm, GrainLocation, SeedLocation, grain_position};
+use crate::household::{HOME_DELIVERY, HOME_ID, Household};
 use crate::livestock::{Flock, PASTURE_GATE, WOOL_PER_SHEEP, WoolLocation};
 use bevy::prelude::*;
 
@@ -53,6 +54,7 @@ pub struct Settlement {
     pub construction: Construction,
     pub farm: Farm,
     pub flock: Flock,
+    pub household: Household,
 }
 impl Default for Settlement {
     fn default() -> Self {
@@ -62,10 +64,16 @@ impl Default for Settlement {
             construction: Construction::default(),
             farm: Farm::default(),
             flock: Flock::default(),
+            household: Household::default(),
         }
     }
 }
 impl Settlement {
+    fn advance_environment(&mut self, seconds: f64) {
+        self.farm.grow(seconds);
+        self.flock.graze(seconds);
+        self.household.advance(seconds, &mut self.farm.grain);
+    }
     pub fn count(&self, location: LogLocation) -> usize {
         self.logs.iter().filter(|&&v| v == location).count()
     }
@@ -131,6 +139,11 @@ pub enum Task {
     FromPastureEdge,
     DeliveringWool,
     StoringWool,
+    ToFoodStore,
+    LoadingFood,
+    ToHome,
+    UnloadingFood,
+    FromHome,
 }
 impl Task {
     pub fn tending_sheep(self) -> bool {
@@ -159,6 +172,7 @@ enum FarmJob {
 #[derive(Component, Debug)]
 pub struct Worker {
     pub position: Vec2,
+    pub home_id: u32,
     pub task: Task,
     pub carrying: Option<usize>,
     pub carrying_grain: Option<usize>,
@@ -173,6 +187,7 @@ impl Default for Worker {
     fn default() -> Self {
         Self {
             position: STOCKPILE,
+            home_id: HOME_ID,
             task: Task::Idle,
             carrying: None,
             carrying_grain: None,
@@ -186,11 +201,29 @@ impl Default for Worker {
     }
 }
 impl Worker {
+    pub fn for_home(home_id: u32) -> Self {
+        Self {
+            home_id,
+            ..Self::default()
+        }
+    }
     fn start(&mut self, task: Task) {
         self.task = task;
         self.handling = 0.0;
     }
     fn choose_task(&mut self, settlement: &Settlement) -> bool {
+        if settlement.household.supply_ordered
+            && self.home_id == settlement.household.id
+            && let Some(grain) = settlement
+                .farm
+                .grain
+                .iter()
+                .position(|&g| g == GrainLocation::Stored)
+        {
+            self.target = grain;
+            self.start(Task::ToFoodStore);
+            return true;
+        }
         if settlement.construction.ordered && !settlement.construction.complete {
             if settlement.installed() == BUILD_COST {
                 self.start(Task::ToSite);
@@ -259,19 +292,19 @@ impl Worker {
         self.start(Task::ToPastureGateway);
         true
     }
+    // Pure single-worker harness; the runtime advances the environment once per world tick.
+    #[cfg(test)]
     pub fn advance(&mut self, mut seconds: f32, settlement: &mut Settlement) {
         if !seconds.is_finite() || seconds <= 0.0 {
             return;
         }
         while seconds > 0.0 {
             if self.task == Task::Idle && !self.choose_task(settlement) {
-                settlement.farm.grow(seconds as f64);
-                settlement.flock.graze(seconds as f64);
+                settlement.advance_environment(seconds as f64);
                 return;
             }
             let step = seconds.min(1.0 / 64.0);
-            settlement.farm.grow(step as f64);
-            settlement.flock.graze(step as f64);
+            settlement.advance_environment(step as f64);
             self.advance_work(step, settlement);
             seconds -= step;
         }
@@ -302,8 +335,13 @@ impl Worker {
                 | Task::ToWool
                 | Task::FromPasture
                 | Task::FromPastureEdge
-                | Task::DeliveringWool => {
+                | Task::DeliveringWool
+                | Task::ToFoodStore
+                | Task::ToHome
+                | Task::FromHome => {
                     let goal = match self.task {
+                        Task::ToFoodStore | Task::FromHome => STOCKPILE,
+                        Task::ToHome => HOME_DELIVERY,
                         Task::ToPastureGateway | Task::DeliveringWool => STOCKPILE,
                         Task::ToPastureEdge | Task::FromPastureEdge => FIELD_WORK,
                         Task::ToPasture | Task::FromPasture => PASTURE_GATE,
@@ -333,6 +371,9 @@ impl Worker {
                     self.position = goal;
                     seconds -= travel;
                     self.start(match self.task {
+                        Task::ToFoodStore => Task::LoadingFood,
+                        Task::ToHome => Task::UnloadingFood,
+                        Task::FromHome => Task::Idle,
                         Task::ToPastureGateway => Task::ToPastureEdge,
                         Task::ToPastureEdge => Task::ToPasture,
                         Task::ToPasture if self.sheep_hauling => Task::ToWool,
@@ -374,6 +415,23 @@ impl Worker {
                         break;
                     }
                     match self.task {
+                        Task::LoadingFood => {
+                            if settlement.farm.grain[self.target] != GrainLocation::Stored {
+                                self.start(Task::Idle);
+                                continue;
+                            }
+                            settlement.farm.grain[self.target] = GrainLocation::Carried;
+                            self.carrying_grain = Some(self.target);
+                            self.start(Task::ToHome);
+                        }
+                        Task::UnloadingFood => {
+                            let grain = self
+                                .carrying_grain
+                                .take()
+                                .expect("home delivery requires cargo");
+                            settlement.farm.grain[grain] = GrainLocation::Home(self.home_id);
+                            self.start(Task::FromHome);
+                        }
                         Task::Shearing => {
                             assert!(
                                 settlement.flock.clip(self.target),
@@ -475,8 +533,8 @@ impl Worker {
         }
     }
 }
-fn spawn_worker(mut commands: Commands) {
-    commands.spawn(Worker::default());
+fn spawn_worker(mut commands: Commands, settlement: Res<Settlement>) {
+    commands.spawn(Worker::for_home(settlement.household.id));
 }
 fn simulate(
     time: Res<Time<Fixed>>,
@@ -485,8 +543,9 @@ fn simulate(
     mut workers: Query<&mut Worker>,
 ) {
     clock.0 += time.delta_secs_f64();
+    settlement.advance_environment(time.delta_secs_f64());
     for mut worker in &mut workers {
-        worker.advance(time.delta_secs(), &mut settlement);
+        worker.advance_work(time.delta_secs(), &mut settlement);
     }
 }
 #[cfg(test)]

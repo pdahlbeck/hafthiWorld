@@ -5,6 +5,9 @@ use crate::{
 };
 use bevy::{prelude::*, ui_widgets::Activate, window::PrimaryWindow};
 
+pub const ORDER_PANEL_HEIGHT: f32 = 100.0;
+pub const ORDER_PANEL_BOTTOM: f32 = 12.0;
+
 pub struct OrdersPlugin;
 impl Plugin for OrdersPlugin {
     fn build(&self, app: &mut App) {
@@ -37,6 +40,7 @@ pub enum OrderButton {
     Sow,
     Reap,
     Shear,
+    SupplyHome,
 }
 fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
     match order {
@@ -53,6 +57,13 @@ fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
                 }
             } else {
                 "This tree is already ordered or felled."
+            };
+        }
+        OrderButton::SupplyHome => {
+            ui.feedback = if settlement.household.request_supply() {
+                "Home supply ordered. Worker waits for stored grain, then carries it to the house."
+            } else {
+                "Home supply is already ordered; it waits for grain in storage."
             };
         }
         OrderButton::Shear => {
@@ -146,7 +157,7 @@ fn issue_orders(
     if input.rig.mode == CameraMode::Strategy {
         if input.mouse.just_pressed(MouseButton::Left)
             && let Some(cursor) = window.cursor_position()
-            && cursor.y < window.height() - 76.0
+            && cursor.y < window.height() - ORDER_PANEL_HEIGHT - ORDER_PANEL_BOTTOM - 8.0
             && let Ok((camera, transform)) = camera.single()
             && let Ok(ray) = camera.viewport_to_world(transform, cursor)
             && let Some(i) = pick_tree(ray.origin, *ray.direction, &settlement)
@@ -171,6 +182,9 @@ fn issue_orders(
     if input.keys.just_pressed(KeyCode::KeyB) {
         apply(OrderButton::Build, &mut ui, &mut settlement);
     }
+    if input.keys.just_pressed(KeyCode::KeyH) {
+        apply(OrderButton::SupplyHome, &mut ui, &mut settlement);
+    }
     if input.keys.just_pressed(KeyCode::KeyC) {
         apply(OrderButton::Shear, &mut ui, &mut settlement);
     }
@@ -185,7 +199,7 @@ fn issue_orders(
 mod tests {
     use super::*;
     #[test]
-    fn farm_and_sheep_orders_obey_the_same_mode_and_focus_guards() {
+    fn all_production_and_home_orders_obey_mode_and_focus_guards() {
         use crate::farming::{CropPhase, Farm};
         let mut app = App::new();
         app.init_resource::<Settlement>()
@@ -203,6 +217,15 @@ mod tests {
                 PrimaryWindow,
             ))
             .id();
+        let supply = app.world_mut().spawn(OrderButton::SupplyHome).id();
+        app.world_mut().trigger(Activate { entity: supply });
+        app.update();
+        assert!(
+            app.world()
+                .resource::<Settlement>()
+                .household
+                .supply_ordered
+        );
         let shear = app.world_mut().spawn(OrderButton::Shear).id();
         app.world_mut().trigger(Activate { entity: shear });
         app.update();
@@ -259,6 +282,21 @@ mod tests {
             app.update();
             assert_eq!(
                 app.world().resource::<Settlement>().farm.harvest_ordered,
+                allowed
+            );
+            app.world_mut().resource_mut::<Settlement>().household =
+                crate::household::Household::default();
+            {
+                let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+                keys.reset_all();
+                keys.press(KeyCode::KeyH);
+            }
+            app.update();
+            assert_eq!(
+                app.world()
+                    .resource::<Settlement>()
+                    .household
+                    .supply_ordered,
                 allowed
             );
             app.world_mut().resource_mut::<Settlement>().flock = crate::livestock::Flock::default();

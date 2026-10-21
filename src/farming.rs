@@ -40,6 +40,8 @@ pub enum GrainLocation {
     Ground,
     Carried,
     Stored,
+    Home(u32),
+    Consumed(u32),
 }
 #[derive(Debug)]
 pub struct Farm {
@@ -101,7 +103,7 @@ impl Plugin for FarmingPlugin {
     }
 }
 #[derive(Component)]
-enum FarmVisual {
+pub(crate) enum FarmVisual {
     Crop,
     Grain(usize),
     Seeds,
@@ -229,10 +231,11 @@ fn sync(
             }
             FarmVisual::Grain(i) => {
                 let p = match farm.grain[i] {
-                    GrainLocation::Unproduced => {
+                    GrainLocation::Unproduced | GrainLocation::Consumed(_) => {
                         *visible = Visibility::Hidden;
                         continue;
                     }
+                    GrainLocation::Home(_) => crate::household::pantry_position(i),
                     GrainLocation::Ground => grain_position(i),
                     GrainLocation::Carried => worker.position + Vec2::new(0.3, 0.0),
                     GrainLocation::Stored => STOCKPILE + Vec2::new(-0.6 + i as f32 * 0.35, 0.8),
