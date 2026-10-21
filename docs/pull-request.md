@@ -1,17 +1,9 @@
-Tree harvesting and timber-rack construction are now player-ordered tasks in the same simulation used by both cameras. Select one of three trees by clicking its crown, a numbered UI button or keys 1–3; order harvest with F or the Harvest button. The worker walks over, fells it, and carries its two finite logs individually to storage.
+Implements the scoped **PR 3 visual pass and performance instrumentation** from #1. The flat coastal placeholder becomes an original procedural limestone shore with Baltic shallows, animated wave lines and grass, a pine group, timber farm silhouette, haze and a presentation-only day/night cycle. Strategy and first person keep observing the existing ordered harvest/transport/build simulation. Walking follows the visible shore and clears pine trunks; the house/rock footprints and authored work routes remain covered by tests.
 
-B or Build rack orders one predefined two-log construction. It waits when storage is empty. The worker removes stored logs only when picking them up, carries each to the site, installs the posts and assembles the final beam. Every material unit has exactly one location (in tree, ground, carried, stored or installed). Duplicate orders cannot regrow trees, create logs or charge twice. The six log entities, tree entities and worker remain persistent across camera changes.
+Low/high quality settings, an F3 wall-frame panel and a timed release CSV benchmark make the small scene measurable. `scripts/benchmark.sh` runs both cameras and tiers, with warmup, fixed lighting, repeat controls and failure propagation. Historical sources and artistic interpretations are recorded separately; no dependencies or third-party assets are added.
 
-This implements **PR 2 — basic resource loop** from #1. Scope is one worker, three trees, one material and one fixed timber-rack site. No new dependencies, large art pass, free placement, general pathfinding or economy expansion. Existing coastal geometry, strategy/first-person controls, cursor policy and collision remain functional. The small open rack has no separate collision footprint; geometry, yields and timings are technical/artistic placeholders.
+Validation: formatting, locked check, **15 tests**, Clippy with warnings denied, and debug/release builds passed. Both views rendered in Linux software Vulkan, orders started the shared worker, and invalid arguments/output failures returned nonzero status. All four timed release cases completed and their CSV statistics were independently recomputed.
 
-Validation with Rust 1.99.1 / Bevy 0.20:
+[Performance report and raw samples](https://github.com/pdahlbeck/hafthiWorld/blob/codex/gotland-visuals-performance/docs/performance/milestone3.md) · [strategy](https://github.com/pdahlbeck/hafthiWorld/blob/codex/gotland-visuals-performance/docs/screenshots/milestone3-strategy.png) · [first person](https://github.com/pdahlbeck/hafthiWorld/blob/codex/gotland-visuals-performance/docs/screenshots/milestone3-first-person.png)
 
-- `cargo fmt --check`
-- `cargo check --locked`
-- `cargo test --locked`: **11 passed**
-- `cargo clippy --locked -- -D warnings`
-- `cargo build --locked`
-
-Tests cover material conservation, waiting for timber, complete transport/install/assembly, idempotence, all three authored routes, frame partitioning, native-button order delivery, focus/mode guards, and persistent scene/simulation entity identities through camera changes. Linux software-Vulkan desktop smoke testing covers tree selection, order buttons, shared state and completed construction; macOS/Metal performance was not measured.
-
-README includes controls, architecture and a repeatable manual smoke test. Screenshots: [orders](https://github.com/pdahlbeck/hafthiWorld/blob/codex/resource-loop/docs/screenshots/milestone2-orders.png), [completed construction](https://github.com/pdahlbeck/hafthiWorld/blob/codex/resource-loop/docs/screenshots/milestone2-complete.png).
+**Remaining target validation:** Apple Silicon/macOS/Metal is unrun because this host is Linux. The portable instrumentation and Mac instructions are included; the short single-repeat llvmpipe results (about 3–6 FPS) establish neither target-GPU performance nor a stable optimization speedup. Audio hardware, GPU timestamps, a large map, weather and a general LOD system are outside this verified slice.
