@@ -30,3 +30,8 @@ The one-sack-to-four-seed-units conversion, four-second sorting task, standing r
 ## First shore barter offer
 
 The roadmap requests Baltic trade and imported salt; this slice depicts only a fictional visitor's brought-in stock. It adds no claim about a specific trade route, place of salt production, archaeological cargo assemblage, Gotlandic salt extraction or a historical wool/salt price. The 2:1 exchange, two available pouches, stationary visitor, blue tunic, pale merchandise sacks and cloth spread are illustrative game rules/art. Source-specific research is still required before adding named origins, documented exchange rates, a harbour reconstruction or vessel types. Salt has no food-processing effect yet. No external meshes, textiles or character art are used.
+
+
+## First seasonal calendar and palette
+
+Four equal 120-second seasons, spring/summer starts for a generic crop, winter growth suspension, survival of planted/ripe crops and unchanged winter walking/trade/grazing are deliberately simplified game rules. They are not dated sowing/harvest evidence, a species-specific growth model, a reconstruction of Viking Age Gotland's climate, or a claim that all crops could overwinter. Meadow/grass colors are original artistic cues rather than botanical surveys; evergreen pines retain their color. There is no snow/ice, precipitation or astronomical coupling to the separate presentation sun. Crop-specific archaeobotanical and climate research is still needed before making historical calendar claims.

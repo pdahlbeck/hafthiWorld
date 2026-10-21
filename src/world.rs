@@ -1,5 +1,5 @@
 //! Seeded coastal scenery. Presentation never advances the settlement simulation.
-use crate::performance::VisualQuality;
+use crate::{calendar::Season, performance::VisualQuality, simulation::Settlement};
 use bevy::{asset::RenderAssetUsages, mesh::PrimitiveTopology, prelude::*};
 
 pub struct WorldPlugin;
@@ -7,7 +7,10 @@ impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Daylight>()
             .add_systems(Startup, setup)
-            .add_systems(Update, (animate_meadow, animate_shore, daylight));
+            .add_systems(
+                Update,
+                (animate_meadow, animate_shore, daylight, seasonal_palette),
+            );
     }
 }
 
@@ -178,11 +181,14 @@ fn spawn_coast(
         (1.07, -0.29, limestone.clone()),
         (1.0, 0.2, meadow),
     ] {
-        commands.spawn((
+        let mut surface = commands.spawn((
             Mesh3d(meshes.add(fan_mesh(scale, height))),
             MeshMaterial3d(material),
             Transform::default(),
         ));
+        if scale == 1.0 {
+            surface.insert(SeasonalSurface::Meadow);
+        }
     }
     let foam = materials.add(StandardMaterial {
         base_color: Color::srgb(0.46, 0.63, 0.57),
@@ -344,6 +350,7 @@ fn spawn_grass(
             MeshMaterial3d(grass_mat.clone()),
             Transform::from_xyz(x, 0.21, z),
             GrassPatch(noise(i * 3 + 2) * 6.0),
+            SeasonalSurface::Grass,
             bevy::light::NotShadowCaster,
         ));
     }
@@ -485,5 +492,109 @@ mod tests {
             assert!(walkable(end));
             assert!(end.distance(start) < movement.length());
         }
+    }
+}
+
+#[derive(Component)]
+enum SeasonalSurface {
+    Meadow,
+    Grass,
+}
+fn seasonal_palette(
+    settlement: Option<Res<Settlement>>,
+    surfaces: Query<(&SeasonalSurface, &MeshMaterial3d<StandardMaterial>)>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut last: Local<Option<Season>>,
+) {
+    let Some(settlement) = settlement else {
+        return;
+    };
+    let season = settlement.calendar.season();
+    if *last == Some(season) {
+        return;
+    }
+    let (meadow, grass) = match season {
+        Season::Spring => (Color::srgb(0.39, 0.49, 0.20), Color::srgb(0.47, 0.53, 0.23)),
+        Season::Summer => (Color::srgb(0.44, 0.48, 0.20), Color::srgb(0.56, 0.54, 0.25)),
+        Season::Autumn => (Color::srgb(0.47, 0.38, 0.21), Color::srgb(0.63, 0.46, 0.25)),
+        Season::Winter => (Color::srgb(0.42, 0.44, 0.36), Color::srgb(0.52, 0.51, 0.40)),
+    };
+    for (surface, handle) in &surfaces {
+        if let Some(mut material) = materials.get_mut(&handle.0) {
+            material.base_color = match surface {
+                SeasonalSurface::Meadow => meadow,
+                SeasonalSurface::Grass => grass,
+            };
+        }
+    }
+    *last = Some(season);
+}
+
+#[cfg(test)]
+mod seasonal_tests {
+    use super::*;
+    #[test]
+    fn seasonal_colors_reuse_existing_meshes_and_materials() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<Settlement>()
+            .init_resource::<Assets<StandardMaterial>>()
+            .add_systems(Update, seasonal_palette);
+        let handle = app
+            .world_mut()
+            .resource_mut::<Assets<StandardMaterial>>()
+            .add(Color::WHITE);
+        let entity = app
+            .world_mut()
+            .spawn((
+                SeasonalSurface::Meadow,
+                MeshMaterial3d(handle.clone()),
+                Transform::from_xyz(1.0, 2.0, 3.0),
+            ))
+            .id();
+        app.update();
+        let spring = app
+            .world()
+            .resource::<Assets<StandardMaterial>>()
+            .get(&handle)
+            .unwrap()
+            .base_color;
+        app.world_mut()
+            .resource_mut::<Settlement>()
+            .calendar
+            .advance(360.0);
+        app.update();
+        let winter = app
+            .world()
+            .resource::<Assets<StandardMaterial>>()
+            .get(&handle)
+            .unwrap()
+            .base_color;
+        assert_ne!(spring, winter);
+        assert_eq!(
+            app.world()
+                .get::<MeshMaterial3d<StandardMaterial>>(entity)
+                .unwrap()
+                .0,
+            handle
+        );
+        assert_eq!(
+            app.world().get::<Transform>(entity).unwrap().translation,
+            Vec3::new(1.0, 2.0, 3.0)
+        );
+        assert_eq!(app.world().resource::<Assets<StandardMaterial>>().len(), 1);
+        app.world_mut()
+            .resource_mut::<Settlement>()
+            .calendar
+            .advance(120.0);
+        app.update();
+        assert_eq!(
+            app.world()
+                .resource::<Assets<StandardMaterial>>()
+                .get(&handle)
+                .unwrap()
+                .base_color,
+            spring
+        );
     }
 }

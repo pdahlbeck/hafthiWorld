@@ -1,4 +1,5 @@
 //! Fixed-step logistics, independent of cameras, input and rendering.
+use crate::calendar::Calendar;
 use crate::farming::{CropPhase, FIELD_WORK, Farm, GrainLocation, SeedLocation, grain_position};
 use crate::household::{HOME_DELIVERY, HOME_ID, Household};
 use crate::livestock::{Flock, PASTURE_GATE, WOOL_PER_SHEEP, WoolLocation};
@@ -57,6 +58,7 @@ pub struct Settlement {
     pub flock: Flock,
     pub household: Household,
     pub barter: Barter,
+    pub calendar: Calendar,
 }
 impl Default for Settlement {
     fn default() -> Self {
@@ -68,12 +70,14 @@ impl Default for Settlement {
             flock: Flock::default(),
             household: Household::default(),
             barter: Barter::default(),
+            calendar: Calendar::default(),
         }
     }
 }
 impl Settlement {
     fn advance_environment(&mut self, seconds: f64) {
-        self.farm.grow(seconds);
+        let growth_seconds = self.calendar.advance(seconds);
+        self.farm.grow(growth_seconds);
         self.flock.graze(seconds);
         self.household.advance(seconds, &mut self.farm.grain);
     }
@@ -295,7 +299,10 @@ impl Worker {
         if let Some(grain) = farm.grain.iter().position(|&g| g == GrainLocation::Ground) {
             self.target = grain;
             self.farm_job = FarmJob::Haul;
-        } else if farm.phase == CropPhase::SowOrdered && farm.seeds == SeedLocation::Stored {
+        } else if farm.phase == CropPhase::SowOrdered
+            && farm.seeds == SeedLocation::Stored
+            && settlement.calendar.can_sow()
+        {
             self.farm_job = FarmJob::Sow;
         } else if farm.phase == CropPhase::Ripe && farm.harvest_ordered {
             self.farm_job = FarmJob::Reap;
@@ -335,7 +342,10 @@ impl Worker {
             return;
         }
         while seconds > 0.0 {
-            if self.task == Task::Idle && !self.choose_task(settlement) {
+            if self.task == Task::Idle
+                && !self.choose_task(settlement)
+                && settlement.farm.phase != CropPhase::SowOrdered
+            {
                 settlement.advance_environment(seconds as f64);
                 return;
             }

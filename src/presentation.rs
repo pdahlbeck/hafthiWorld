@@ -438,8 +438,16 @@ fn hud(
     };
     for mut text in &mut texts {
         *text = Text::new(format!(
-            "hafthiWorld | {mode} | Simulation {:.1}s\nWorker {id:?} (home {}): {:?} | Carrying log: {} | Tree {}: {tree_status}\nLogs: in trees {} | ground {} | carried {} | stored {} | installed {}/{}\nTimber rack: {build}\nCrop: {} {:.0}% | seeds stored {} / carried {} / used {}\nGrain: field {} | carried {} | stored {} | harvests {} | seed batches saved {} ({})\nSheep shorn {}/{} | Wool: fleece {} | ground {} | carried {} | stored {} | trader {}\nTrade 2 wool : 1 salt ({}): offered {} | paid {} | carried {} | stored {}\nHome {}: {} | pantry {} | food used {} | missed {} | next use {:.0}s\n{}\n{controls}",
+            "hafthiWorld | {mode} | Simulation {:.1}s | Year {} {} ({:.0}s left) | {}\nWorker {id:?} (home {}): {:?} | Carrying log: {} | Tree {}: {tree_status}\nLogs: in trees {} | ground {} | carried {} | stored {} | installed {}/{}\nTimber rack: {build}\nCrop: {} {:.0}% | seeds stored {} / carried {} / used {}\nGrain: field {} | carried {} | stored {} | harvests {} | seed batches saved {} ({})\nSheep shorn {}/{} | Wool: fleece {} | ground {} | carried {} | stored {} | trader {}\nTrade 2 wool : 1 salt ({}): offered {} | paid {} | carried {} | stored {}\nHome {}: {} | pantry {} | food used {} | missed {} | next use {:.0}s\n{}\n{controls}",
             clock.0,
+            s.calendar.year,
+            s.calendar.season().label(),
+            s.calendar.remaining(),
+            if s.calendar.can_sow() {
+                "sowing open"
+            } else {
+                "new sowing waits for spring"
+            },
             w.home_id,
             w.task,
             w.carrying.is_some(),
