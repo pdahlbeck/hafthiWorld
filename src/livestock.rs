@@ -12,6 +12,7 @@ pub enum WoolLocation {
     Ground,
     Carried,
     Stored,
+    Trader,
 }
 #[derive(Debug, Clone, Copy)]
 pub struct Sheep {
@@ -263,6 +264,7 @@ fn sync(
                     }
                     WoolLocation::Ground => (flock.ground[i], 0.4),
                     WoolLocation::Carried => (worker.position + Vec2::new(0.3, 0.0), 1.0),
+                    WoolLocation::Trader => (crate::trade::wool_position(i), 0.4),
                     WoolLocation::Stored => {
                         (STOCKPILE + Vec2::new(0.6 + i as f32 * 0.28, -0.6), 0.4)
                     }

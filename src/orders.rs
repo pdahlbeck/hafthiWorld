@@ -42,6 +42,7 @@ pub enum OrderButton {
     Shear,
     SupplyHome,
     ReserveSeed,
+    Barter,
 }
 fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
     match order {
@@ -58,6 +59,13 @@ fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
                 }
             } else {
                 "This tree is already ordered or felled."
+            };
+        }
+        OrderButton::Barter => {
+            ui.feedback = if settlement.barter.request() {
+                "Barter ordered: carry two stored wool per salt pouch, then bring the paid salt home."
+            } else {
+                "Barter already ordered or salt offer exhausted. The visitor has only two pouches."
             };
         }
         OrderButton::ReserveSeed => {
@@ -190,6 +198,9 @@ fn issue_orders(
     if input.keys.just_pressed(KeyCode::KeyB) {
         apply(OrderButton::Build, &mut ui, &mut settlement);
     }
+    if input.keys.just_pressed(KeyCode::KeyJ) {
+        apply(OrderButton::Barter, &mut ui, &mut settlement);
+    }
     if input.keys.just_pressed(KeyCode::KeyV) {
         apply(OrderButton::ReserveSeed, &mut ui, &mut settlement);
     }
@@ -228,6 +239,10 @@ mod tests {
                 PrimaryWindow,
             ))
             .id();
+        let barter = app.world_mut().spawn(OrderButton::Barter).id();
+        app.world_mut().trigger(Activate { entity: barter });
+        app.update();
+        assert!(app.world().resource::<Settlement>().barter.ordered);
         let reserve = app.world_mut().spawn(OrderButton::ReserveSeed).id();
         app.world_mut().trigger(Activate { entity: reserve });
         app.update();
@@ -309,6 +324,14 @@ mod tests {
                 app.world().resource::<Settlement>().farm.reserve_ordered,
                 allowed
             );
+            app.world_mut().resource_mut::<Settlement>().barter = crate::trade::Barter::default();
+            {
+                let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+                keys.reset_all();
+                keys.press(KeyCode::KeyJ);
+            }
+            app.update();
+            assert_eq!(app.world().resource::<Settlement>().barter.ordered, allowed);
             app.world_mut().resource_mut::<Settlement>().household =
                 crate::household::Household::default();
             {
