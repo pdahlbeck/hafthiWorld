@@ -189,8 +189,16 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let timber = materials.add(Color::srgb(0.35, 0.19, 0.085));
-    let edge = materials.add(Color::srgb(0.58, 0.35, 0.14));
+    let timber = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.35, 0.19, 0.085),
+        perceptual_roughness: 0.95,
+        ..default()
+    });
+    let edge = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.58, 0.35, 0.14),
+        perceptual_roughness: 0.95,
+        ..default()
+    });
     let cloth = materials.add(Color::srgb(0.78, 0.67, 0.46));
     let sail_material = materials.add(StandardMaterial {
         base_color: Color::srgb(0.84, 0.72, 0.49),
@@ -199,11 +207,22 @@ fn setup(
         ..default()
     });
     let sail = meshes.add(sail_mesh());
-    let skin = materials.add(Color::srgb(0.67, 0.45, 0.31));
-    let rust_tunic = materials.add(Color::srgb(0.58, 0.25, 0.13));
-    let blue_tunic = materials.add(Color::srgb(0.22, 0.36, 0.43));
-    let head = meshes.add(Sphere::new(0.14));
-    let cube = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
+    let skin = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.67, 0.45, 0.31),
+        perceptual_roughness: 0.95,
+        ..default()
+    });
+    let rust_tunic = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.58, 0.25, 0.13),
+        perceptual_roughness: 0.95,
+        ..default()
+    });
+    let blue_tunic = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.22, 0.36, 0.43),
+        perceptual_roughness: 0.95,
+        ..default()
+    });
+    let cube = meshes.add(crate::art::softened_box(Vec3::ONE, 0.10));
     // Original tapered clinker-inspired hull: visible ribs/plank strakes, no copied vessel model.
     commands
         .spawn((
@@ -213,42 +232,42 @@ fn setup(
             Visibility::Hidden,
         ))
         .with_children(|boat| {
-            for i in 0..13 {
-                let z = -1.9 + i as f32 * (3.8 / 12.0);
-                let width = 0.12 + 0.65 * (1.0 - (z / 2.05).powi(2)).max(0.0);
+            for inner in [false, true] {
                 boat.spawn((
-                    Mesh3d(cube.clone()),
+                    Mesh3d(meshes.add(crate::art::boat_hull(inner))),
                     MeshMaterial3d(timber.clone()),
-                    Transform::from_xyz(0.0, 0.14, z).with_scale(Vec3::new(
-                        width * 1.7,
-                        0.14,
-                        0.33,
-                    )),
+                    Transform::default(),
                 ));
-                for side in [-1.0, 1.0] {
-                    for plank in 0..3 {
-                        boat.spawn((
-                            Mesh3d(cube.clone()),
-                            MeshMaterial3d(if plank == 2 {
-                                edge.clone()
-                            } else {
-                                timber.clone()
-                            }),
-                            Transform::from_xyz(
-                                side * (width - 0.10 + plank as f32 * 0.06),
-                                0.02 + plank as f32 * 0.13,
-                                z,
-                            )
-                            .with_scale(Vec3::new(0.10, 0.14, 0.34)),
-                        ));
-                    }
-                }
             }
-            for z in [-1.92, 1.92] {
+            boat.spawn((
+                Mesh3d(meshes.add(crate::art::boat_deck())),
+                MeshMaterial3d(edge.clone()),
+                Transform::default(),
+            ));
+            for side in [-1.0, 1.0] {
+                let rail: Vec<_> = (0..49)
+                    .map(|i| {
+                        let z = -2. + i as f32 / 12.;
+                        let width = 0.75 * (1. - (z / 2.04).powi(2)).max(0.025).powf(0.65);
+                        Vec3::new(side * width, 0.43 + 0.25 * (z / 2.).powi(4), z)
+                    })
+                    .collect();
                 boat.spawn((
-                    Mesh3d(cube.clone()),
+                    Mesh3d(meshes.add(crate::art::tube(&rail, 0.045))),
                     MeshMaterial3d(edge.clone()),
-                    Transform::from_xyz(0.0, 0.25, z).with_scale(Vec3::new(0.13, 0.85, 0.13)),
+                    Transform::default(),
+                ));
+            }
+            for end in [-1., 1.] {
+                let stem = [
+                    Vec3::new(0., -0.18, end * 1.99),
+                    Vec3::new(0., 0.30, end * 2.03),
+                    Vec3::new(0., 0.83, end * 2.12),
+                ];
+                boat.spawn((
+                    Mesh3d(meshes.add(crate::art::tube(&stem, 0.10))),
+                    MeshMaterial3d(edge.clone()),
+                    Transform::default(),
                 ));
             }
             boat.spawn((
@@ -276,30 +295,19 @@ fn setup(
                         blue_tunic.clone()
                     };
                     crew.spawn((
-                        Mesh3d(cube.clone()),
+                        Mesh3d(meshes.add(crate::art::tunic())),
                         MeshMaterial3d(tunic.clone()),
-                        Transform::from_xyz(0.0, 0.36, 0.0).with_scale(Vec3::new(0.30, 0.48, 0.23)),
-                    ));
-                    crew.spawn((
-                        Mesh3d(head.clone()),
-                        MeshMaterial3d(skin.clone()),
-                        Transform::from_xyz(0.0, 0.74, 0.0),
-                    ));
-                    for x in [-0.09, 0.09] {
-                        crew.spawn((
-                            Mesh3d(cube.clone()),
-                            MeshMaterial3d(timber.clone()),
-                            Transform::from_xyz(x, 0.09, 0.0)
-                                .with_scale(Vec3::new(0.09, 0.18, 0.12)),
-                        ));
-                        crew.spawn((
-                            Mesh3d(cube.clone()),
-                            MeshMaterial3d(tunic.clone()),
-                            Transform::from_xyz(x * 2.0, 0.36, 0.07)
-                                .with_rotation(Quat::from_rotation_x(-0.45))
-                                .with_scale(Vec3::new(0.08, 0.34, 0.08)),
-                        ));
-                    }
+                        Transform::from_xyz(0., 0.42, 0.).with_scale(Vec3::splat(0.60)),
+                    ))
+                    .with_children(|body| {
+                        crate::art::human_parts(
+                            body,
+                            &mut meshes,
+                            &mut materials,
+                            tunic,
+                            skin.clone(),
+                        );
+                    });
                 });
             }
             // A visible steering oar belongs to the visiting helmsman.

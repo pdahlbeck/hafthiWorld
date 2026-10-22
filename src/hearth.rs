@@ -74,7 +74,7 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let wood = materials.add(Color::srgb(0.34, 0.24, 0.14));
-    let cube = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
+    let cube = meshes.add(crate::art::softened_box(Vec3::ONE, 0.09));
     commands
         .spawn((
             FuelRack,

@@ -60,3 +60,8 @@ This is an original procedural wooden-boat silhouette with tapered hull, visible
 ## Visiting sailors and sail presentation
 
 Two small visiting sailor models, steering oar and a curved plain square cloth make the existing boat's movement legible. These are original stylized geometry, not identified people, documented clothing, a named historical rig or evidence for a two-person crew on a particular Gotlandic cargo vessel. Three-second raising/lowering, fixed sailing speed and unmodeled wind/crew work are presentation/game abstractions. There are no copied museum plans or external character/sail assets. Specific vessel, rigging and crew evidence remains necessary before claiming a historical reconstruction.
+
+
+## Sculpted timber, hull, people and foliage pass
+
+The revised horizontal round-timber wall courses, bowed straw-colored roof, ridge/eave fringe, continuous small hull and swept stems are original artistic constructions. They do not establish a particular log-building technique, roof plant species, harbour/vessel type or documented Gotlandic plan circa 900 CE. The simple faces, hair, belts, clothing proportions and boots are illustrative rather than reconstructed regional dress. Clustered irregular crowns and boughs are stylistic vegetation, not a botanical survey. The earlier SGU/museum references continue to support only the broad regional material/context vocabulary; no additional archaeological certainty is claimed by increasing model detail. All new shapes, vertex colors and variations are authored in Rust without copied meshes, museum plans, photographs, generated-image assets or external textures.
