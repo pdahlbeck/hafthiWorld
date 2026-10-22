@@ -55,3 +55,8 @@ The blue coastal helper, free shore-side invitation, fixed founder/coastal role 
 ## First outbound collection boat
 
 This is an original procedural wooden-boat silhouette with tapered hull, visible plank-like strips, raised ends, mast and furled cloth. It is a gameplay symbol, not an archaeological reconstruction or a typological identification of a Gotland vessel circa 900 CE. No particular dimensions, construction method, sail rig, harbour layout, mooring arrangement, wool cargo, route or sailing duration is asserted as historical evidence. A fixed dry-land handover point and an authored boat route replace future boarding, seamanship and harbour work. Named vessel/site-specific research remains necessary before depicting a documented Gotlandic harbour or ship type. No external boat meshes, plans, photographs or textile assets are used.
+
+
+## Visiting sailors and sail presentation
+
+Two small visiting sailor models, steering oar and a curved plain square cloth make the existing boat's movement legible. These are original stylized geometry, not identified people, documented clothing, a named historical rig or evidence for a two-person crew on a particular Gotlandic cargo vessel. Three-second raising/lowering, fixed sailing speed and unmodeled wind/crew work are presentation/game abstractions. There are no copied museum plans or external character/sail assets. Specific vessel, rigging and crew evidence remains necessary before claiming a historical reconstruction.
