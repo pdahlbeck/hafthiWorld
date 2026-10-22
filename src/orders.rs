@@ -46,6 +46,7 @@ pub enum OrderButton {
     SupplyFuel,
     Fish,
     SaltFish,
+    InviteHelper,
 }
 fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
     match order {
@@ -62,6 +63,13 @@ fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
                 }
             } else {
                 "This tree is already ordered or felled."
+            };
+        }
+        OrderButton::InviteHelper => {
+            ui.feedback = if settlement.request_helper() {
+                "Coastal helper invited. The resident finishes the current coastal job before handing it over."
+            } else {
+                "The coastal helper has already been invited; there are two residents at most."
             };
         }
         OrderButton::Fish => {
@@ -226,6 +234,9 @@ fn issue_orders(
     if input.keys.just_pressed(KeyCode::KeyB) {
         apply(OrderButton::Build, &mut ui, &mut settlement);
     }
+    if input.keys.just_pressed(KeyCode::KeyN) {
+        apply(OrderButton::InviteHelper, &mut ui, &mut settlement);
+    }
     if input.keys.just_pressed(KeyCode::KeyP) {
         apply(OrderButton::Fish, &mut ui, &mut settlement);
     }
@@ -276,6 +287,10 @@ mod tests {
                 PrimaryWindow,
             ))
             .id();
+        let invite = app.world_mut().spawn(OrderButton::InviteHelper).id();
+        app.world_mut().trigger(Activate { entity: invite });
+        app.update();
+        assert!(app.world().resource::<Settlement>().helper_requested);
         for order in [OrderButton::Fish, OrderButton::SaltFish] {
             let button = app.world_mut().spawn(order).id();
             app.world_mut().trigger(Activate { entity: button });
@@ -413,6 +428,19 @@ mod tests {
                     .household
                     .hearth
                     .ordered,
+                allowed
+            );
+            app.world_mut()
+                .resource_mut::<Settlement>()
+                .helper_requested = false;
+            {
+                let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+                keys.reset_all();
+                keys.press(KeyCode::KeyN);
+            }
+            app.update();
+            assert_eq!(
+                app.world().resource::<Settlement>().helper_requested,
                 allowed
             );
             app.world_mut().resource_mut::<Settlement>().fishery =

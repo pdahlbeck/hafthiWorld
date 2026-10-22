@@ -129,13 +129,13 @@ pub enum CoastalTask {
 pub fn table_position(index: usize) -> Vec2 {
     SALTING_TABLE + Vec2::new(-0.35 + index as f32 * 0.24, 0.0)
 }
-fn fish_position(location: FishLocation, index: usize, worker: &Worker) -> (Vec2, f32) {
+fn fish_position(location: FishLocation, index: usize, carrier: Vec2) -> (Vec2, f32) {
     match location {
         FishLocation::FreshAtShore => (FISHING_SPOT + Vec2::new(-0.3, 0.35), 0.4),
         FishLocation::RawStored => (STOCKPILE + Vec2::new(-0.8 + index as f32 * 0.26, 1.7), 0.36),
         FishLocation::RawAtTable | FishLocation::PreservedAtTable => (table_position(index), 0.92),
         FishLocation::CarriedRaw | FishLocation::CarriedPreserved => {
-            (worker.position + Vec2::new(0.3, 0.0), 1.0)
+            (carrier + Vec2::new(0.3, 0.0), 1.0)
         }
         FishLocation::PreservedStored => {
             (STOCKPILE + Vec2::new(-0.8 + index as f32 * 0.26, 2.1), 0.36)
@@ -221,6 +221,7 @@ fn setup(
         commands
             .spawn((
                 FishVisual(i),
+                Name::new(format!("Fish {}", i)),
                 Mesh3d(body.clone()),
                 MeshMaterial3d(fresh.clone()),
                 Transform::default(),
@@ -248,9 +249,6 @@ fn sync(
         &mut MeshMaterial3d<StandardMaterial>,
     )>,
 ) {
-    let Ok(worker) = workers.single() else {
-        return;
-    };
     for (visual, mut transform, mut visibility, mut material) in &mut visuals {
         let location = s.fishery.fish[visual.0];
         if matches!(location, FishLocation::Uncaught | FishLocation::Eaten(_)) {
@@ -258,7 +256,14 @@ fn sync(
             continue;
         }
         *visibility = Visibility::Visible;
-        let (p, y) = fish_position(location, visual.0, worker);
+        let (p, y) = fish_position(
+            location,
+            visual.0,
+            workers
+                .iter()
+                .find(|w| w.carrying_fish == Some(visual.0))
+                .map_or(STOCKPILE, |w| w.position),
+        );
         transform.translation = Vec3::new(p.x, y, p.y);
         transform.scale = Vec3::new(0.12, 0.07, 0.30);
         let handle = if matches!(

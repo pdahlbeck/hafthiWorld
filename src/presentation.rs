@@ -7,7 +7,7 @@ use crate::{
     orders::{ORDER_PANEL_BOTTOM, ORDER_PANEL_HEIGHT, OrderButton, OrderInput, OrderState},
     simulation::{
         BUILD_COST, BUILD_SITE, LogLocation, STOCKPILE, Settlement, SimulationClock, TOTAL_LOGS,
-        TREE_POSITIONS, Task, Worker, ground_log_position,
+        TREE_POSITIONS, Task, Worker, WorkerRole, ground_log_position,
     },
     trade::SaltLocation,
 };
@@ -24,6 +24,7 @@ impl Plugin for PresentationPlugin {
         app.add_systems(Startup, setup).add_systems(
             Update,
             (
+                spawn_helper_visual,
                 sync_worker,
                 sync_logs,
                 sync_trees,
@@ -37,7 +38,7 @@ impl Plugin for PresentationPlugin {
     }
 }
 #[derive(Component)]
-struct WorkerVisual;
+struct WorkerVisual(u32);
 #[derive(Component)]
 struct AxeVisual;
 #[derive(Component)]
@@ -75,7 +76,7 @@ fn setup(
             Mesh3d(meshes.add(Cuboid::new(0.48, 1.2, 0.35))),
             MeshMaterial3d(wool),
             Transform::default(),
-            WorkerVisual,
+            WorkerVisual(1),
         ))
         .with_children(|p| {
             p.spawn((
@@ -138,6 +139,7 @@ fn setup(
             Transform::default(),
             Visibility::Hidden,
             LogVisual(i),
+            Name::new(format!("Log {}", i)),
         ));
     }
     let gold = materials.add(Color::srgb(0.82, 0.65, 0.24));
@@ -219,6 +221,7 @@ fn setup(
                 ("K: Supply firewood", OrderButton::SupplyFuel),
                 ("P: Fish", OrderButton::Fish),
                 ("L: Salt fish", OrderButton::SaltFish),
+                ("N: Invite helper", OrderButton::InviteHelper),
             ] {
                 panel
                     .spawn((
@@ -248,6 +251,40 @@ fn setup(
             }
         });
 }
+fn spawn_helper_visual(
+    mut commands: Commands,
+    workers: Query<&Worker>,
+    visuals: Query<&WorkerVisual>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    let Some(helper) = workers
+        .iter()
+        .find(|w| w.id == 2 && w.role == WorkerRole::Coastal)
+    else {
+        return;
+    };
+    if visuals.iter().any(|v| v.0 == 2) {
+        return;
+    }
+    let tunic = materials.add(Color::srgb(0.20, 0.37, 0.48));
+    let skin = materials.add(Color::srgb(0.65, 0.43, 0.30));
+    commands
+        .spawn((
+            WorkerVisual(2),
+            Name::new("Resident 2 coastal worker"),
+            Mesh3d(meshes.add(Cuboid::new(0.48, 1.2, 0.35))),
+            MeshMaterial3d(tunic),
+            Transform::from_xyz(helper.position.x, 0.9, helper.position.y),
+        ))
+        .with_children(|p| {
+            p.spawn((
+                Mesh3d(meshes.add(Sphere::new(0.19))),
+                MeshMaterial3d(skin),
+                Transform::from_xyz(0.0, 0.78, 0.0),
+            ));
+        });
+}
 type AxeTransforms<'w, 's> = Query<
     'w,
     's,
@@ -257,13 +294,13 @@ type AxeTransforms<'w, 's> = Query<
 fn sync_worker(
     workers: Query<&Worker>,
     clock: Res<SimulationClock>,
-    mut visuals: Query<&mut Transform, With<WorkerVisual>>,
+    mut visuals: Query<(&WorkerVisual, &mut Transform)>,
     mut axes: AxeTransforms,
 ) {
-    let Ok(w) = workers.single() else {
-        return;
-    };
-    for mut t in &mut visuals {
+    for (visual, mut t) in &mut visuals {
+        let Some(w) = workers.iter().find(|w| w.id == visual.0) else {
+            continue;
+        };
         let previous = Vec2::new(t.translation.x, t.translation.z);
         let direction = w.position - previous;
         if direction.length_squared() > 0.00001 {
@@ -271,6 +308,9 @@ fn sync_worker(
         }
         t.translation = Vec3::new(w.position.x, 0.9, w.position.y);
     }
+    let Some(w) = workers.iter().find(|w| w.id == 1) else {
+        return;
+    };
     for (mut axe, mut visible) in &mut axes {
         *visible = if matches!(
             w.task,
@@ -316,9 +356,6 @@ fn sync_logs(
     workers: Query<&Worker>,
     mut logs: Query<(&LogVisual, &mut Transform, &mut Visibility)>,
 ) {
-    let Ok(worker) = workers.single() else {
-        return;
-    };
     for (log, mut t, mut visibility) in &mut logs {
         let state = settlement.logs[log.0];
         *visibility = if matches!(
@@ -335,7 +372,13 @@ fn sync_logs(
                 let p = ground_log_position(log.0);
                 Vec3::new(p.x, 0.38, p.y)
             }
-            LogLocation::Carried => Vec3::new(worker.position.x, 1.15, worker.position.y + 0.32),
+            LogLocation::Carried => {
+                let Some(worker) = workers.iter().find(|w| w.carrying == Some(log.0)) else {
+                    *visibility = Visibility::Hidden;
+                    continue;
+                };
+                Vec3::new(worker.position.x, 1.15, worker.position.y + 0.32)
+            }
             LogLocation::Stored => {
                 let slot = log.0;
                 Vec3::new(
@@ -417,9 +460,20 @@ fn hud(
     workers: Query<(Entity, &Worker)>,
     mut texts: Query<&mut Text, With<StatusText>>,
 ) {
-    let Ok((id, w)) = workers.single() else {
+    let Some((id, w)) = workers.iter().find(|(_, w)| w.id == 1) else {
         return;
     };
+    let crew =
+        if let Some((_, helper)) = workers.iter().find(|(_, w)| w.role == WorkerRole::Coastal) {
+            format!(
+                "Crew 2 | Resident 2 coastal: {:?} | coastal job held by {}",
+                helper.task,
+                s.coastal_owner
+                    .map_or("none".to_owned(), |id| format!("resident {id}"))
+            )
+        } else {
+            "Crew 1 | Resident 1 handles all work | N: invite coastal helper".to_owned()
+        };
     let mode = if rig.mode == CameraMode::Strategy {
         "STRATEGY"
     } else {
@@ -443,15 +497,15 @@ fn hud(
         "not ordered"
     };
     let controls = if rig.mode == CameraMode::Strategy {
-        "WASD orbit | Q/E zoom | Arrows pan | Click tree / 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | V seeds | J barter | K fuel | P fish | L salt | Tab walk | Esc quit"
+        "WASD orbit | Q/E zoom | Arrows pan | Click tree / 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | V seeds | J barter | K fuel | P fish | L salt | N helper | Tab walk | Esc quit"
     } else if rig.captured {
-        "WASD walk | Mouse look | 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | V seeds | J barter | K fuel | P fish | L salt | Tab strategy | Esc release mouse"
+        "WASD walk | Mouse look | 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | V seeds | J barter | K fuel | P fish | L salt | N helper | Tab strategy | Esc release mouse"
     } else {
         "Click to capture mouse | Tab / Esc strategy (simulation keeps running)"
     };
     for mut text in &mut texts {
         *text = Text::new(format!(
-            "hafthiWorld | {mode} | Simulation {:.1}s | Year {} {} ({:.0}s left) | {}\nWorker {id:?} (home {}): {:?} | Carrying log: {} | Tree {}: {tree_status}\nLogs: in trees {} | ground {} | carried {} | stored {} | installed {}/{}\nTimber rack: {build}\nCrop: {} {:.0}% | seeds stored {} / carried {} / used {}\nGrain: field {} | carried {} | stored {} | harvests {} | seed batches saved {} ({})\nSheep shorn {}/{} | Wool: fleece {} | ground {} | carried {} | stored {} | trader {}\nTrade 2 wool : 1 salt ({}): offered {} | paid {} | carried {} | stored {} | table {} | used {}\nFish: uncaught {} | raw {} | processing {} | preserved {} | carried {} | home {} | eaten {}\nHome {}: {} | pantry grain {} / fish {} | food used {} (fish {}) | missed {} | next use {:.0}s\nWinter fuel: {} | at home {} / {} | burned {} | missed {} | next use {:.0} winter s\n{}\n{controls}",
+            "hafthiWorld | {mode} | Simulation {:.1}s | Year {} {} ({:.0}s left) | {}\nWorker {id:?} (home {}): {:?} | Carrying log: {} | Tree {}: {tree_status}\n{crew}\nLogs: in trees {} | ground {} | carried {} | stored {} | installed {}/{}\nTimber rack: {build}\nCrop: {} {:.0}% | seeds stored {} / carried {} / used {}\nGrain: field {} | carried {} | stored {} | harvests {} | seed batches saved {} ({})\nSheep shorn {}/{} | Wool: fleece {} | ground {} | carried {} | stored {} | trader {}\nTrade 2 wool : 1 salt ({}): offered {} | paid {} | carried {} | stored {} | table {} | used {}\nFish: uncaught {} | raw {} | processing {} | preserved {} | carried {} | home {} | eaten {}\nHome {}: {} | pantry grain {} / fish {} | food used {} (fish {}) | missed {} | next use {:.0}s\nWinter fuel: {} | at home {} / {} | burned {} | missed {} | next use {:.0} winter s\n{}\n{controls}",
             clock.0,
             s.calendar.year,
             s.calendar.season().label(),
@@ -551,6 +605,305 @@ fn hud(
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn crew_app() -> App {
+        use bevy::time::TimeUpdateStrategy;
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(TimeUpdateStrategy::ManualDuration(
+                std::time::Duration::from_millis(100),
+            ))
+            .init_resource::<Assets<Mesh>>()
+            .init_resource::<Assets<StandardMaterial>>()
+            .init_resource::<CameraRig>()
+            .init_resource::<OrderState>()
+            .add_plugins((
+                crate::simulation::SimulationPlugin,
+                PresentationPlugin,
+                crate::farming::FarmingPlugin,
+                crate::fishing::FishingPlugin,
+                crate::livestock::LivestockPlugin,
+                crate::trade::TradePlugin,
+                crate::household::HouseholdPlugin,
+                crate::hearth::HearthPlugin,
+            ));
+        app.update();
+        app
+    }
+    #[test]
+    fn two_residents_work_in_parallel_with_real_sources_correct_cargo_and_persistent_views() {
+        use crate::{
+            fishing::{FISH_UNITS, FishLocation},
+            simulation::COASTAL_REST,
+        };
+        let mut app = crew_app();
+        let original_scene: Vec<_> = app
+            .world_mut()
+            .query_filtered::<Entity, With<Mesh3d>>()
+            .iter(app.world())
+            .collect();
+        let mut recruited_entities = Vec::new();
+        {
+            let mut s = app.world_mut().resource_mut::<Settlement>();
+            assert!(s.request_helper());
+            assert!(!s.request_helper());
+            s.household.hearth.request();
+            s.household.request_supply();
+            s.farm.request_reserve();
+            s.flock.request_shear();
+            s.barter.request();
+            s.fishery.request_fishing();
+            s.fishery.request_salting();
+            s.request_build();
+            for i in 0..3 {
+                s.request_harvest(i);
+            }
+        }
+        let mut worked_together = false;
+        let mut cargo_seen = [false; 5];
+        for frame in 0..10000 {
+            {
+                let mut s = app.world_mut().resource_mut::<Settlement>();
+                if s.farm.harvests < 2 {
+                    if matches!(
+                        s.farm.phase,
+                        crate::farming::CropPhase::Fallow | crate::farming::CropPhase::Harvested
+                    ) {
+                        s.farm.request_sow();
+                    }
+                    s.farm.request_reap();
+                }
+            }
+            if frame % 13 == 0 {
+                app.world_mut().resource_mut::<CameraRig>().toggle();
+            }
+            app.update();
+            if frame == 2 {
+                recruited_entities = app
+                    .world_mut()
+                    .query::<Entity>()
+                    .iter(app.world())
+                    .collect();
+            }
+            let workers: Vec<_> = app
+                .world_mut()
+                .query::<&Worker>()
+                .iter(app.world())
+                .map(|w| {
+                    (
+                        w.id,
+                        w.position,
+                        w.task,
+                        w.carrying,
+                        w.carrying_grain,
+                        w.carrying_wool,
+                        w.carrying_salt,
+                        w.carrying_fish,
+                    )
+                })
+                .collect();
+            assert_eq!(workers.len(), 2);
+            let a = workers.iter().find(|w| w.0 == 1).unwrap();
+            let b = workers.iter().find(|w| w.0 == 2).unwrap();
+            worked_together |= a.2 == Task::Felling && matches!(b.2, Task::Coastal(_));
+            assert!(!matches!(a.2, Task::Coastal(_)));
+            let names: Vec<_> = app
+                .world_mut()
+                .query::<(&Name, &Transform)>()
+                .iter(app.world())
+                .map(|(n, t)| (n.as_str().to_owned(), t.translation))
+                .collect();
+            for w in &workers {
+                assert!(crate::world::walkable(w.1));
+                let cargo = [w.3, w.4, w.5, w.6, w.7];
+                assert!(cargo.iter().flatten().count() <= 1);
+                for (kind, slot) in cargo.iter().enumerate() {
+                    if let Some(slot) = slot {
+                        cargo_seen[kind] = true;
+                        let name = match kind {
+                            0 => format!("Log {slot}"),
+                            1 => format!("Grain {slot}"),
+                            2 => format!("Wool {slot}"),
+                            3 => format!("Salt pouch {}", slot + 1),
+                            _ => format!("Fish {slot}"),
+                        };
+                        let visual = names
+                            .iter()
+                            .find(|(n, _)| n == &name)
+                            .expect("persistent cargo visual");
+                        let expected = if kind == 0 {
+                            Vec3::new(w.1.x, 1.15, w.1.y + 0.32)
+                        } else {
+                            Vec3::new(w.1.x + 0.3, 1.0, w.1.y)
+                        };
+                        assert!(
+                            visual.1.distance(expected) < 0.001,
+                            "{name} detached from resident {}",
+                            w.0
+                        );
+                    }
+                }
+            }
+            for (visual, transform) in app
+                .world_mut()
+                .query::<(&WorkerVisual, &Transform)>()
+                .iter(app.world())
+            {
+                let w = workers.iter().find(|w| w.0 == visual.0).unwrap();
+                assert_eq!(transform.translation, Vec3::new(w.1.x, 0.9, w.1.y));
+            }
+            let s = app.world().resource::<Settlement>();
+            assert_eq!(
+                s.fishery.count(FishLocation::CarriedRaw)
+                    + s.fishery.count(FishLocation::CarriedPreserved),
+                workers.iter().filter(|w| w.7.is_some()).count()
+            );
+            assert_eq!(
+                s.barter.count(SaltLocation::Carried),
+                workers.iter().filter(|w| w.6.is_some()).count()
+            );
+            assert_eq!(
+                s.count(LogLocation::Carried),
+                workers.iter().filter(|w| w.3.is_some()).count()
+            );
+            let grain = s
+                .farm
+                .grain
+                .iter()
+                .filter(|g| {
+                    matches!(
+                        g,
+                        GrainLocation::Ground
+                            | GrainLocation::Carried
+                            | GrainLocation::Stored
+                            | GrainLocation::Home(_)
+                    )
+                })
+                .count();
+            assert_eq!(
+                4 * s.farm.harvests,
+                grain as u64 + s.household.food_used - s.household.fish_used
+                    + s.farm.seed_batches_saved
+            );
+            assert_eq!(
+                s.fishery.batches as usize,
+                s.barter.count(SaltLocation::Consumed)
+            );
+            assert_eq!(
+                s.fishery.count(FishLocation::Eaten(1)) as u64,
+                s.household.fish_used
+            );
+            assert!(s.fishery.count(FishLocation::Eaten(1)) <= FISH_UNITS);
+        }
+        assert!(worked_together);
+        assert!(cargo_seen.into_iter().all(|seen| seen));
+        let s = app.world().resource::<Settlement>();
+        assert_eq!(s.household.food_used, 10);
+        assert_eq!(s.household.fish_used, 4);
+        assert_eq!(s.installed(), BUILD_COST);
+        assert_eq!(s.household.hearth.burned, 4);
+        assert_eq!(s.farm.harvests, 2);
+        assert_eq!(s.fishery.batches, 2);
+        assert_eq!(s.flock.count(WoolLocation::Trader), 4);
+        assert_eq!(s.barter.count(SaltLocation::Consumed), 2);
+        assert!(
+            original_scene
+                .iter()
+                .all(|&e| app.world().get_entity(e).is_ok())
+        );
+        assert!(
+            recruited_entities
+                .iter()
+                .all(|&e| app.world().get_entity(e).is_ok())
+        );
+        assert_eq!(
+            app.world_mut().query::<Entity>().iter(app.world()).count(),
+            recruited_entities.len()
+        );
+        assert_eq!(
+            app.world_mut()
+                .query_filtered::<Entity, With<WorkerVisual>>()
+                .iter(app.world())
+                .count(),
+            2
+        );
+        let helper = app
+            .world_mut()
+            .query::<&Worker>()
+            .iter(app.world())
+            .find(|w| w.id == 2)
+            .unwrap();
+        assert_eq!(helper.position, COASTAL_REST);
+        assert_eq!(helper.task, Task::Idle);
+    }
+    #[test]
+    fn runtime_invitation_during_salting_preserves_original_actor_and_job_owner() {
+        let mut app = crew_app();
+        let original = app
+            .world_mut()
+            .query_filtered::<Entity, With<Worker>>()
+            .single(app.world())
+            .unwrap();
+        {
+            let mut s = app.world_mut().resource_mut::<Settlement>();
+            s.fishery.request_fishing();
+            s.fishery.request_salting();
+            s.household.request_supply();
+            s.barter.salt.fill(SaltLocation::Stored);
+        }
+        for _ in 0..2000 {
+            app.update();
+            if app.world().get::<Worker>(original).unwrap().task
+                == Task::Coastal(crate::fishing::CoastalTask::Salting)
+            {
+                break;
+            }
+        }
+        assert_eq!(app.world().resource::<Settlement>().coastal_owner, Some(1));
+        assert!(
+            app.world_mut()
+                .resource_mut::<Settlement>()
+                .request_helper()
+        );
+        let mut helper_worked = false;
+        for frame in 0..2000 {
+            if frame % 7 == 0 {
+                app.world_mut().resource_mut::<CameraRig>().toggle();
+            }
+            app.update();
+            let owner = app.world().resource::<Settlement>().coastal_owner;
+            let primary_task = app.world().get::<Worker>(original).unwrap().task;
+            let helper = app
+                .world_mut()
+                .query::<&Worker>()
+                .iter(app.world())
+                .find(|w| w.id == 2)
+                .unwrap();
+            helper_worked |= matches!(helper.task, Task::Coastal(_));
+            if owner == Some(1) {
+                assert!(!matches!(helper.task, Task::Coastal(_)));
+            }
+            if owner == Some(2) {
+                assert!(!matches!(primary_task, Task::Coastal(_)));
+            }
+        }
+        assert!(helper_worked);
+        assert!(app.world().get::<Worker>(original).is_some());
+        assert_eq!(
+            app.world_mut()
+                .query_filtered::<Entity, With<WorkerVisual>>()
+                .iter(app.world())
+                .count(),
+            2
+        );
+        assert_eq!(app.world().resource::<Settlement>().fishery.batches, 2);
+        assert_eq!(
+            app.world()
+                .resource::<Settlement>()
+                .barter
+                .count(SaltLocation::Consumed),
+            2
+        );
+    }
     #[test]
     fn firewood_entities_persist_through_delivery_camera_changes_and_two_winters() {
         use bevy::time::TimeUpdateStrategy;

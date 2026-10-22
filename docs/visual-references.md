@@ -45,3 +45,8 @@ The winter-demand step uses the existing generic timber units as a stand-in for 
 ## Coastal-food package: interpretation limits
 
 The generic fish silhouettes, shore net-frame marker, table, two-fish/one-pouch recipe, finite four-fish allowance and short work durations are original game abstractions. They are not an identification of a historical species, fishing technology, seasonal yield, processing duration or a documented Gotlandic salting recipe circa 900 CE. Salt is existing brought-in trading stock, not local production; no named origin or route is added. Brown output denotes the implemented preserved-ration stage, not a chemical or food-safety model. There is no spoilage, cooking, nutrition or disease system, and omitting fresh fish as a ration is a scope choice rather than a historical dietary claim. Species/gear/diet-specific archaeology and processing evidence are required before making more specific regional claims. No external fish, net or furniture assets are used.
+
+
+## Two-resident labor slice
+
+The blue coastal helper, free shore-side invitation, fixed founder/coastal role split and unchanged per-household ration/fuel quotas are fictional gameplay choices. They do not establish a Viking Age Gotland household population, recruitment custom, gender/age role, wage system or historical labor productivity. Both residents belong to the existing abstract home. There is no claim of an independently reconstructed second farm, family demography or individual nutrition. The helper is an original procedural actor using the scene's existing material vocabulary.
