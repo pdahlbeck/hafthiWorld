@@ -44,6 +44,8 @@ pub enum OrderButton {
     ReserveSeed,
     Barter,
     SupplyFuel,
+    Fish,
+    SaltFish,
 }
 fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
     match order {
@@ -60,6 +62,20 @@ fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
                 }
             } else {
                 "This tree is already ordered or felled."
+            };
+        }
+        OrderButton::Fish => {
+            ui.feedback = if settlement.fishery.request_fishing() {
+                "Fishing ordered: the worker catches and stores up to four real fish at the shore."
+            } else {
+                "Fishing already ordered or this session's four-fish catch is exhausted."
+            };
+        }
+        OrderButton::SaltFish => {
+            ui.feedback = if settlement.fishery.request_salting() {
+                "Salting ordered: waits for two stored raw fish and one stored salt, then carries ingredients to the table."
+            } else {
+                "Salting already ordered; it waits for real raw fish and stored salt."
             };
         }
         OrderButton::SupplyFuel => {
@@ -85,9 +101,9 @@ fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
         }
         OrderButton::SupplyHome => {
             ui.feedback = if settlement.household.request_supply() {
-                "Home supply ordered. Worker waits for stored grain, then carries it to the house."
+                "Home supply ordered. Worker carries stored grain or salted fish to the house."
             } else {
-                "Home supply is already ordered; it waits for grain in storage."
+                "Home supply already ordered; it waits for stored grain or salted fish."
             };
         }
         OrderButton::Shear => {
@@ -210,6 +226,12 @@ fn issue_orders(
     if input.keys.just_pressed(KeyCode::KeyB) {
         apply(OrderButton::Build, &mut ui, &mut settlement);
     }
+    if input.keys.just_pressed(KeyCode::KeyP) {
+        apply(OrderButton::Fish, &mut ui, &mut settlement);
+    }
+    if input.keys.just_pressed(KeyCode::KeyL) {
+        apply(OrderButton::SaltFish, &mut ui, &mut settlement);
+    }
     if input.keys.just_pressed(KeyCode::KeyK) {
         apply(OrderButton::SupplyFuel, &mut ui, &mut settlement);
     }
@@ -254,6 +276,13 @@ mod tests {
                 PrimaryWindow,
             ))
             .id();
+        for order in [OrderButton::Fish, OrderButton::SaltFish] {
+            let button = app.world_mut().spawn(order).id();
+            app.world_mut().trigger(Activate { entity: button });
+            app.update();
+        }
+        assert!(app.world().resource::<Settlement>().fishery.fishing_ordered);
+        assert!(app.world().resource::<Settlement>().fishery.salting_ordered);
         let fuel = app.world_mut().spawn(OrderButton::SupplyFuel).id();
         app.world_mut().trigger(Activate { entity: fuel });
         app.update();
@@ -384,6 +413,23 @@ mod tests {
                     .household
                     .hearth
                     .ordered,
+                allowed
+            );
+            app.world_mut().resource_mut::<Settlement>().fishery =
+                crate::fishing::Fishery::default();
+            {
+                let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+                keys.reset_all();
+                keys.press(KeyCode::KeyP);
+                keys.press(KeyCode::KeyL);
+            }
+            app.update();
+            assert_eq!(
+                app.world().resource::<Settlement>().fishery.fishing_ordered,
+                allowed
+            );
+            assert_eq!(
+                app.world().resource::<Settlement>().fishery.salting_ordered,
                 allowed
             );
             app.world_mut().resource_mut::<Settlement>().flock = crate::livestock::Flock::default();

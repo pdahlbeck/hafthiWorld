@@ -2,6 +2,7 @@
 use crate::{
     camera::{CameraMode, CameraRig},
     farming::{GrainLocation, SEED_UNITS, SeedLocation},
+    fishing::FishLocation as Fish,
     livestock::{SHEEP_COUNT, WoolLocation},
     orders::{ORDER_PANEL_BOTTOM, ORDER_PANEL_HEIGHT, OrderButton, OrderInput, OrderState},
     simulation::{
@@ -216,6 +217,8 @@ fn setup(
                 ("V: Save seed", OrderButton::ReserveSeed),
                 ("J: Barter wool/salt", OrderButton::Barter),
                 ("K: Supply firewood", OrderButton::SupplyFuel),
+                ("P: Fish", OrderButton::Fish),
+                ("L: Salt fish", OrderButton::SaltFish),
             ] {
                 panel
                     .spawn((
@@ -282,6 +285,7 @@ fn sync_worker(
                 | Task::FromHome
         ) || w.task.tending_sheep()
             || w.task.trading()
+            || matches!(w.task, Task::Coastal(_))
             || matches!(
                 w.task,
                 Task::ToSeedStore
@@ -439,15 +443,15 @@ fn hud(
         "not ordered"
     };
     let controls = if rig.mode == CameraMode::Strategy {
-        "WASD orbit | Q/E zoom | Arrows pan | Click tree / 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | V seeds | J barter | K fuel | Tab walk | Esc quit"
+        "WASD orbit | Q/E zoom | Arrows pan | Click tree / 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | V seeds | J barter | K fuel | P fish | L salt | Tab walk | Esc quit"
     } else if rig.captured {
-        "WASD walk | Mouse look | 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | V seeds | J barter | K fuel | Tab strategy | Esc release mouse"
+        "WASD walk | Mouse look | 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | V seeds | J barter | K fuel | P fish | L salt | Tab strategy | Esc release mouse"
     } else {
         "Click to capture mouse | Tab / Esc strategy (simulation keeps running)"
     };
     for mut text in &mut texts {
         *text = Text::new(format!(
-            "hafthiWorld | {mode} | Simulation {:.1}s | Year {} {} ({:.0}s left) | {}\nWorker {id:?} (home {}): {:?} | Carrying log: {} | Tree {}: {tree_status}\nLogs: in trees {} | ground {} | carried {} | stored {} | installed {}/{}\nTimber rack: {build}\nCrop: {} {:.0}% | seeds stored {} / carried {} / used {}\nGrain: field {} | carried {} | stored {} | harvests {} | seed batches saved {} ({})\nSheep shorn {}/{} | Wool: fleece {} | ground {} | carried {} | stored {} | trader {}\nTrade 2 wool : 1 salt ({}): offered {} | paid {} | carried {} | stored {}\nHome {}: {} | pantry {} | food used {} | missed {} | next use {:.0}s\nWinter fuel: {} | at home {} / {} | burned {} | missed {} | next use {:.0} winter s\n{}\n{controls}",
+            "hafthiWorld | {mode} | Simulation {:.1}s | Year {} {} ({:.0}s left) | {}\nWorker {id:?} (home {}): {:?} | Carrying log: {} | Tree {}: {tree_status}\nLogs: in trees {} | ground {} | carried {} | stored {} | installed {}/{}\nTimber rack: {build}\nCrop: {} {:.0}% | seeds stored {} / carried {} / used {}\nGrain: field {} | carried {} | stored {} | harvests {} | seed batches saved {} ({})\nSheep shorn {}/{} | Wool: fleece {} | ground {} | carried {} | stored {} | trader {}\nTrade 2 wool : 1 salt ({}): offered {} | paid {} | carried {} | stored {} | table {} | used {}\nFish: uncaught {} | raw {} | processing {} | preserved {} | carried {} | home {} | eaten {}\nHome {}: {} | pantry grain {} / fish {} | food used {} (fish {}) | missed {} | next use {:.0}s\nWinter fuel: {} | at home {} / {} | burned {} | missed {} | next use {:.0} winter s\n{}\n{controls}",
             clock.0,
             s.calendar.year,
             s.calendar.season().label(),
@@ -510,11 +514,24 @@ fn hud(
             s.barter.count(SaltLocation::Paid),
             s.barter.count(SaltLocation::Carried),
             s.barter.count(SaltLocation::Stored),
+            s.barter.count(SaltLocation::AtSalting),
+            s.barter.count(SaltLocation::Consumed),
+            s.fishery.count(Fish::Uncaught),
+            s.fishery.count(Fish::FreshAtShore) + s.fishery.count(Fish::RawStored),
+            s.fishery.count(Fish::RawAtTable),
+            s.fishery.count(Fish::PreservedAtTable) + s.fishery.count(Fish::PreservedStored),
+            s.fishery.count(Fish::CarriedRaw) + s.fishery.count(Fish::CarriedPreserved),
+            s.fishery.count(Fish::Home(s.household.id)),
+            s.fishery.count(Fish::Eaten(s.household.id)),
             s.household.id,
-            s.household
-                .status(s.farm.count(GrainLocation::Home(s.household.id))),
+            s.household.status(
+                s.farm.count(GrainLocation::Home(s.household.id))
+                    + s.fishery.count(Fish::Home(s.household.id))
+            ),
             s.farm.count(GrainLocation::Home(s.household.id)),
+            s.fishery.count(Fish::Home(s.household.id)),
             s.household.food_used,
+            s.household.fish_used,
             s.household.missed_rations,
             s.household.next_use(),
             s.household.hearth.status(
