@@ -1,32 +1,16 @@
-## Replace the most visible block-shaped placeholder models
+## Animate residents from their actual work and cargo
 
-The boat hull was a stack of small cuboids, people had rectangular torsos/limbs, the house used flat roof slabs, and the pines were stacked cones. This pass replaces those silhouettes with original sculpted procedural meshes:
+Residents previously slid along their routes with static limbs. The founder and coastal helper now walk with alternating legs/arms, perform procedural work gestures, and reach towards the real cargo they carry. The axe follows the right arm and hides while carrying goods.
 
-- Continuous curved inner/outer boat shell, shaped deck, rounded gunwales and swept stems, retaining the same sail, crew and actual cargo.
-- Shaped tunics, rounded limbs/boots, belts, hands, hair and simple faces for both residents, the visitor and sailors.
-- Rounded timber wall courses, framed doorway, bowed thatch with strand/color variation, irregular eave fringe and ridge.
-- Irregular clustered matte foliage and softened edges on authored furniture, racks and handover planks.
+Poses derive from the saved simulation clock, task and cargo. Body heading is recorded from fixed-step movement and saved with the resident, so pausing, changing camera and loading restore a consistent pose. Older version-1 saves default the optional heading field until the next movement. Visiting sailors and trader retain their existing poses.
 
-Mesh normals/winding, material roughness and vertex-color variation provide depth at walking distance. The low tier reduces small eave/bough details while keeping the new main forms. No external models/textures, dependencies or generated-image assets are used.
-
-This is a rendering/art pass. Model identity, world positions, routes, orders, collision footprints, material accounting, inspection and version-1 saves remain the existing simulation. The house and vessel are fictional interpretations, not a newly established archaeological reconstruction.
+This uses the existing original meshes, with shoulder/hip pivots and bounded arm reaches. It is a small procedural animation pass without articulated elbows/knees or terrain foot placement. Routes, job timing, cargo positions and material accounting retain their existing behavior. No dependencies or external assets.
 
 ## Validation
 
-- Formatting, locked check/test, Clippy with warnings denied, debug and release builds.
-- **82 tests**, including finite geometry, unit normals, triangle orientation and upward roof/deck faces, plus the existing full economy/save/crew/sail/camera/inspection tests.
-- Graphical Linux software-Vulkan inspection at low and high quality, strategy and first person, using the same existing loading save as prior screenshots. Functional rendering checks do not establish macOS/Metal frame rates.
-- Before/after captures and close views in `docs/screenshots/sculpt-*.png`.
+- Locked check/test, formatting, Clippy with warnings denied, debug and release builds.
+- **85 tests passed**, including new cargo-directed arm/alternating-leg tests, legacy heading defaults, and exact resident pose/heading restoration through pause and camera switches.
+- Linux software-Vulkan Low graphical check: actual wool-carrying resident and helper, pause/resume, F5/F9 and both camera modes. This is functional validation, not a macOS performance measurement.
+- README documents the implementation, limits and desktop test sequence.
 
-Stacked on #19 (`codex/settlement-inspector`), related to #1. User-requested visual upgrade; no new economy systems.
-
-
-Same save, time and Low quality (software Vulkan; timing overlay is not Apple GPU performance):
-
-| Before | After |
-| --- | --- |
-| ![Previous box models](https://github.com/pdahlbeck/hafthiWorld/blob/codex/sculpted-coastal-visuals/docs/screenshots/sculpt-before-low.png) | ![Sculpted models](https://github.com/pdahlbeck/hafthiWorld/blob/codex/sculpted-coastal-visuals/docs/screenshots/sculpt-after-low.png) |
-
-![High-quality farmstead](https://github.com/pdahlbeck/hafthiWorld/blob/codex/sculpted-coastal-visuals/docs/screenshots/sculpt-farmstead-high.png)
-
-![Continuous hull and shaped sailors](https://github.com/pdahlbeck/hafthiWorld/blob/codex/sculpted-coastal-visuals/docs/screenshots/sculpt-boat-high.png)
+Stacked on #20 (`codex/sculpted-coastal-visuals`), continuing #1.
