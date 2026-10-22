@@ -35,3 +35,8 @@ The roadmap requests Baltic trade and imported salt; this slice depicts only a f
 ## First seasonal calendar and palette
 
 Four equal 120-second seasons, spring/summer starts for a generic crop, winter growth suspension, survival of planted/ripe crops and unchanged winter walking/trade/grazing are deliberately simplified game rules. They are not dated sowing/harvest evidence, a species-specific growth model, a reconstruction of Viking Age Gotland's climate, or a claim that all crops could overwinter. Meadow/grass colors are original artistic cues rather than botanical surveys; evergreen pines retain their color. There is no snow/ice, precipitation or astronomical coupling to the separate presentation sun. Crop-specific archaeobotanical and climate research is still needed before making historical calendar claims.
+
+
+## First winter firewood demand
+
+The winter-demand step uses the existing generic timber units as a stand-in for prepared firewood. It makes no claim about log mass, splitting/drying, actual heat output, household fuel requirements or a specific Gotlandic hearth/chimney form. One log per forty winter seconds, a three-log top-up target, the small door-side rack and shortage-only consequences are gameplay/art abstractions. No hearth interior or live fire is reconstructed; warmth is represented only by fuel demand and inventories. Named archaeological building/hearth evidence and species-specific fuel research are still needed before making such historical claims.

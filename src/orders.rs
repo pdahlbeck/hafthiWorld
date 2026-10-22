@@ -43,6 +43,7 @@ pub enum OrderButton {
     SupplyHome,
     ReserveSeed,
     Barter,
+    SupplyFuel,
 }
 fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
     match order {
@@ -59,6 +60,13 @@ fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
                 }
             } else {
                 "This tree is already ordered or felled."
+            };
+        }
+        OrderButton::SupplyFuel => {
+            ui.feedback = if settlement.household.hearth.request() {
+                "Firewood ordered: carry stored logs home, up to three; winter burns owned fuel only."
+            } else {
+                "Firewood supply already ordered. It waits for stored timber or room in the home stack."
             };
         }
         OrderButton::Barter => {
@@ -202,6 +210,9 @@ fn issue_orders(
     if input.keys.just_pressed(KeyCode::KeyB) {
         apply(OrderButton::Build, &mut ui, &mut settlement);
     }
+    if input.keys.just_pressed(KeyCode::KeyK) {
+        apply(OrderButton::SupplyFuel, &mut ui, &mut settlement);
+    }
     if input.keys.just_pressed(KeyCode::KeyJ) {
         apply(OrderButton::Barter, &mut ui, &mut settlement);
     }
@@ -243,6 +254,16 @@ mod tests {
                 PrimaryWindow,
             ))
             .id();
+        let fuel = app.world_mut().spawn(OrderButton::SupplyFuel).id();
+        app.world_mut().trigger(Activate { entity: fuel });
+        app.update();
+        assert!(
+            app.world()
+                .resource::<Settlement>()
+                .household
+                .hearth
+                .ordered
+        );
         let barter = app.world_mut().spawn(OrderButton::Barter).id();
         app.world_mut().trigger(Activate { entity: barter });
         app.update();
@@ -349,6 +370,20 @@ mod tests {
                     .resource::<Settlement>()
                     .household
                     .supply_ordered,
+                allowed
+            );
+            {
+                let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+                keys.reset_all();
+                keys.press(KeyCode::KeyK);
+            }
+            app.update();
+            assert_eq!(
+                app.world()
+                    .resource::<Settlement>()
+                    .household
+                    .hearth
+                    .ordered,
                 allowed
             );
             app.world_mut().resource_mut::<Settlement>().flock = crate::livestock::Flock::default();

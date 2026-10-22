@@ -215,6 +215,7 @@ fn setup(
                 ("H: Supply home", OrderButton::SupplyHome),
                 ("V: Save seed", OrderButton::ReserveSeed),
                 ("J: Barter wool/salt", OrderButton::Barter),
+                ("K: Supply firewood", OrderButton::SupplyFuel),
             ] {
                 panel
                     .spawn((
@@ -270,7 +271,11 @@ fn sync_worker(
     for (mut axe, mut visible) in &mut axes {
         *visible = if matches!(
             w.task,
-            Task::ToFoodStore
+            Task::ToFuelStore
+                | Task::LoadingFuel
+                | Task::ToFuelHome
+                | Task::UnloadingFuel
+                | Task::ToFoodStore
                 | Task::LoadingFood
                 | Task::ToHome
                 | Task::UnloadingFood
@@ -312,12 +317,16 @@ fn sync_logs(
     };
     for (log, mut t, mut visibility) in &mut logs {
         let state = settlement.logs[log.0];
-        *visibility = if matches!(state, LogLocation::InTree | LogLocation::Installed) {
+        *visibility = if matches!(
+            state,
+            LogLocation::InTree | LogLocation::Installed | LogLocation::Burned(_)
+        ) {
             Visibility::Hidden
         } else {
             Visibility::Inherited
         };
         t.translation = match state {
+            LogLocation::Home(_) => crate::hearth::log_position(log.0),
             LogLocation::Ground => {
                 let p = ground_log_position(log.0);
                 Vec3::new(p.x, 0.38, p.y)
@@ -430,15 +439,15 @@ fn hud(
         "not ordered"
     };
     let controls = if rig.mode == CameraMode::Strategy {
-        "WASD orbit | Q/E zoom | Arrows pan | Click tree / 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | V seeds | J barter | Tab walk | Esc quit"
+        "WASD orbit | Q/E zoom | Arrows pan | Click tree / 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | V seeds | J barter | K fuel | Tab walk | Esc quit"
     } else if rig.captured {
-        "WASD walk | Mouse look | 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | V seeds | J barter | Tab strategy | Esc release mouse"
+        "WASD walk | Mouse look | 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | V seeds | J barter | K fuel | Tab strategy | Esc release mouse"
     } else {
         "Click to capture mouse | Tab / Esc strategy (simulation keeps running)"
     };
     for mut text in &mut texts {
         *text = Text::new(format!(
-            "hafthiWorld | {mode} | Simulation {:.1}s | Year {} {} ({:.0}s left) | {}\nWorker {id:?} (home {}): {:?} | Carrying log: {} | Tree {}: {tree_status}\nLogs: in trees {} | ground {} | carried {} | stored {} | installed {}/{}\nTimber rack: {build}\nCrop: {} {:.0}% | seeds stored {} / carried {} / used {}\nGrain: field {} | carried {} | stored {} | harvests {} | seed batches saved {} ({})\nSheep shorn {}/{} | Wool: fleece {} | ground {} | carried {} | stored {} | trader {}\nTrade 2 wool : 1 salt ({}): offered {} | paid {} | carried {} | stored {}\nHome {}: {} | pantry {} | food used {} | missed {} | next use {:.0}s\n{}\n{controls}",
+            "hafthiWorld | {mode} | Simulation {:.1}s | Year {} {} ({:.0}s left) | {}\nWorker {id:?} (home {}): {:?} | Carrying log: {} | Tree {}: {tree_status}\nLogs: in trees {} | ground {} | carried {} | stored {} | installed {}/{}\nTimber rack: {build}\nCrop: {} {:.0}% | seeds stored {} / carried {} / used {}\nGrain: field {} | carried {} | stored {} | harvests {} | seed batches saved {} ({})\nSheep shorn {}/{} | Wool: fleece {} | ground {} | carried {} | stored {} | trader {}\nTrade 2 wool : 1 salt ({}): offered {} | paid {} | carried {} | stored {}\nHome {}: {} | pantry {} | food used {} | missed {} | next use {:.0}s\nWinter fuel: {} | at home {} / {} | burned {} | missed {} | next use {:.0} winter s\n{}\n{controls}",
             clock.0,
             s.calendar.year,
             s.calendar.season().label(),
@@ -508,6 +517,15 @@ fn hud(
             s.household.food_used,
             s.household.missed_rations,
             s.household.next_use(),
+            s.household.hearth.status(
+                s.calendar.season(),
+                s.count(LogLocation::Home(s.household.id))
+            ),
+            s.count(LogLocation::Home(s.household.id)),
+            crate::hearth::FUEL_TARGET,
+            s.household.hearth.burned,
+            s.household.hearth.missed,
+            s.household.hearth.next_use(),
             orders.feedback
         ));
     }
@@ -516,6 +534,77 @@ fn hud(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn firewood_entities_persist_through_delivery_camera_changes_and_two_winters() {
+        use bevy::time::TimeUpdateStrategy;
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(TimeUpdateStrategy::ManualDuration(
+                std::time::Duration::from_millis(100),
+            ))
+            .init_resource::<Assets<Mesh>>()
+            .init_resource::<Assets<StandardMaterial>>()
+            .init_resource::<CameraRig>()
+            .init_resource::<OrderState>()
+            .add_plugins((
+                crate::simulation::SimulationPlugin,
+                PresentationPlugin,
+                crate::hearth::HearthPlugin,
+            ));
+        app.update();
+        let logs: Vec<_> = app
+            .world_mut()
+            .query_filtered::<Entity, With<LogVisual>>()
+            .iter(app.world())
+            .collect();
+        assert_eq!(logs.len(), TOTAL_LOGS);
+        let worker = app
+            .world_mut()
+            .query_filtered::<Entity, With<Worker>>()
+            .single(app.world())
+            .unwrap();
+        let entity_count = app.world().entities().len();
+        {
+            let mut s = app.world_mut().resource_mut::<Settlement>();
+            s.logs.fill(LogLocation::Stored); // Controlled initial stock for the rendering integration test.
+            s.calendar.advance(360.0);
+            s.household.hearth.request();
+        }
+        let mut delivered = false;
+        for frame in 0..6500 {
+            if frame % 11 == 0 {
+                app.world_mut().resource_mut::<CameraRig>().toggle();
+            }
+            app.update();
+            let s = app.world().resource::<Settlement>();
+            for &id in &logs {
+                let slot = app.world().get::<LogVisual>(id).unwrap().0;
+                if s.logs[slot] == LogLocation::Home(s.household.id) {
+                    delivered = true;
+                    assert_eq!(
+                        app.world().get::<Transform>(id).unwrap().translation,
+                        crate::hearth::log_position(slot)
+                    );
+                    assert_ne!(
+                        *app.world().get::<Visibility>(id).unwrap(),
+                        Visibility::Hidden
+                    );
+                }
+            }
+        }
+        assert!(delivered && app.world().get::<Worker>(worker).is_some());
+        assert_eq!(app.world().entities().len(), entity_count);
+        assert_eq!(
+            app.world().resource::<Settlement>().household.hearth.burned as usize,
+            TOTAL_LOGS
+        );
+        for id in logs {
+            assert_eq!(
+                *app.world().get::<Visibility>(id).unwrap(),
+                Visibility::Hidden
+            );
+        }
+    }
     #[test]
     fn scene_keeps_the_same_worker_tree_and_log_entities_through_harvest_and_build() {
         use bevy::time::TimeUpdateStrategy;

@@ -2,6 +2,7 @@
 mod calendar;
 mod camera;
 mod farming;
+mod hearth;
 mod household;
 mod livestock;
 mod orders;
@@ -56,6 +57,7 @@ fn main() -> AppExit {
             farming::FarmingPlugin,
             livestock::LivestockPlugin,
             household::HouseholdPlugin,
+            hearth::HearthPlugin,
             trade::TradePlugin,
             performance::PerformancePlugin,
         ))
