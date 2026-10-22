@@ -50,3 +50,8 @@ The generic fish silhouettes, shore net-frame marker, table, two-fish/one-pouch 
 ## Two-resident labor slice
 
 The blue coastal helper, free shore-side invitation, fixed founder/coastal role split and unchanged per-household ration/fuel quotas are fictional gameplay choices. They do not establish a Viking Age Gotland household population, recruitment custom, gender/age role, wage system or historical labor productivity. Both residents belong to the existing abstract home. There is no claim of an independently reconstructed second farm, family demography or individual nutrition. The helper is an original procedural actor using the scene's existing material vocabulary.
+
+
+## First outbound collection boat
+
+This is an original procedural wooden-boat silhouette with tapered hull, visible plank-like strips, raised ends, mast and furled cloth. It is a gameplay symbol, not an archaeological reconstruction or a typological identification of a Gotland vessel circa 900 CE. No particular dimensions, construction method, sail rig, harbour layout, mooring arrangement, wool cargo, route or sailing duration is asserted as historical evidence. A fixed dry-land handover point and an authored boat route replace future boarding, seamanship and harbour work. Named vessel/site-specific research remains necessary before depicting a documented Gotlandic harbour or ship type. No external boat meshes, plans, photographs or textile assets are used.

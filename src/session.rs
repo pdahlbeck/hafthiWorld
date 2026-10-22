@@ -65,7 +65,8 @@ impl Snapshot {
     }
     fn validate(&self) -> Result<(), String> {
         let s = &self.settlement;
-        if !self.daylight.hour.is_finite()
+        if !s.voyage.valid(&s.flock.wool)
+            || !self.daylight.hour.is_finite()
             || !(0.0..24.0).contains(&self.daylight.hour)
             || !s.farm.growth.is_finite()
             || s.farm.growth < 0.0
@@ -375,6 +376,7 @@ mod tests {
             s.fishery.request_salting();
             s.flock.request_shear();
             s.barter.request();
+            s.voyage.request();
             s.household.request_supply();
             s.request_harvest(0);
             s.request_harvest(1);
@@ -420,6 +422,10 @@ mod tests {
             }
         }
         assert!(seen_cargo && seen_salting);
+        assert_eq!(
+            original.world().resource::<Settlement>().voyage.phase,
+            crate::shipping::VoyagePhase::Completed
+        );
         assert_eq!(
             original
                 .world()
@@ -562,6 +568,23 @@ mod tests {
         let snapshot = Snapshot::capture(app.world_mut());
         write_save(&path, &snapshot).unwrap();
         let original = fs::read(&path).unwrap();
+        // Saves written before shipping retain the same version and load a default voyage.
+        let mut legacy: SaveFile = serde_json::from_slice(&original).unwrap();
+        let mut payload: serde_json::Value = serde_json::from_str(&legacy.payload).unwrap();
+        payload["settlement"]
+            .as_object_mut()
+            .unwrap()
+            .remove("voyage");
+        legacy.payload = serde_json::to_string(&payload).unwrap();
+        legacy.checksum = checksum(legacy.payload.as_bytes());
+        assert_eq!(
+            Snapshot::decode(&serde_json::to_vec(&legacy).unwrap())
+                .unwrap()
+                .encode()
+                .unwrap(),
+            original
+        );
+
         fs::write(directory.join("save.json.tmp"), b"occupied").unwrap();
         assert!(write_save(&path, &snapshot).is_err());
         assert_eq!(fs::read(&path).unwrap(), original);

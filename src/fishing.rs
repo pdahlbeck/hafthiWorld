@@ -103,6 +103,11 @@ impl Fishery {
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum CoastalTask {
+    ToExportPile,
+    LoadingExportWool,
+    ToBoat,
+    UnloadingExportWool,
+    ReturnFromBoat,
     ToFishingSpot,
     Fishing,
     LoadingFresh,

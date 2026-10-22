@@ -22,6 +22,24 @@ impl Worker {
     }
     pub(super) fn advance_coastal(&mut self, seconds: &mut f32, s: &mut Settlement, task: C) {
         match task {
+            C::ToExportPile => {
+                return self.coastal_move(seconds, crate::trade::TRADE_WORK, C::LoadingExportWool);
+            }
+            C::ToBoat => {
+                return self.coastal_move(
+                    seconds,
+                    crate::shipping::LANDING_WORK,
+                    C::UnloadingExportWool,
+                );
+            }
+            C::ReturnFromBoat => {
+                self.coastal_move(seconds, crate::trade::TRADE_WORK, C::ReturnFromBoat);
+                if self.position == crate::trade::TRADE_WORK {
+                    self.start(Task::Idle);
+                }
+                return;
+            }
+
             C::ToFishingSpot => return self.coastal_move(seconds, FISHING_SPOT, C::Fishing),
             C::ReturningFresh => return self.coastal_move(seconds, STOCKPILE, C::StoringFresh),
             C::ToBrineStore => return self.coastal_move(seconds, STOCKPILE, C::LoadingBrineSalt),
@@ -50,6 +68,20 @@ impl Worker {
             return;
         }
         match task {
+            C::LoadingExportWool => {
+                assert_eq!(
+                    s.flock.wool[self.target],
+                    crate::livestock::WoolLocation::Trader
+                );
+                s.flock.wool[self.target] = crate::livestock::WoolLocation::Carried;
+                self.carrying_wool = Some(self.target);
+                self.coastal_start(C::ToBoat);
+            }
+            C::UnloadingExportWool => {
+                let wool = self.carrying_wool.take().expect("outbound wool cargo");
+                s.flock.wool[wool] = crate::livestock::WoolLocation::Aboard;
+                self.coastal_start(C::ReturnFromBoat);
+            }
             C::Fishing => {
                 assert!(s.fishery.catch(self.target));
                 self.coastal_start(C::LoadingFresh);

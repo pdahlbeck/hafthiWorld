@@ -13,6 +13,8 @@ pub enum WoolLocation {
     Carried,
     Stored,
     Trader,
+    Aboard,
+    Exported,
 }
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct Sheep {
@@ -259,7 +261,7 @@ fn sync(
             }
             LivestockVisual::Wool(i) => {
                 let (p, y) = match flock.wool[i] {
-                    WoolLocation::Fleece => {
+                    WoolLocation::Fleece | WoolLocation::Exported => {
                         *visible = Visibility::Hidden;
                         continue;
                     }
@@ -271,6 +273,10 @@ fn sync(
                             continue;
                         };
                         (worker.position + Vec2::new(0.3, 0.0), 1.0)
+                    }
+                    WoolLocation::Aboard => {
+                        let p = crate::shipping::cargo_position(&settlement.voyage, i);
+                        (Vec2::new(p.x, p.z), p.y)
                     }
                     WoolLocation::Trader => (crate::trade::wool_position(i), 0.4),
                     WoolLocation::Stored => {
