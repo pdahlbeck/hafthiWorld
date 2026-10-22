@@ -133,8 +133,8 @@ fn setup(
     quality: Res<VisualQuality>,
 ) {
     spawn_coast(&mut commands, &mut meshes, &mut materials);
-    spawn_farmstead(&mut commands, &mut meshes, &mut materials);
-    spawn_pines(&mut commands, &mut meshes, &mut materials);
+    spawn_farmstead(&mut commands, &mut meshes, &mut materials, *quality);
+    spawn_pines(&mut commands, &mut meshes, &mut materials, *quality);
     spawn_grass(&mut commands, &mut meshes, &mut materials, *quality);
     commands.spawn((
         DirectionalLight {
@@ -235,25 +235,62 @@ fn spawn_farmstead(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
+    quality: VisualQuality,
 ) {
-    let timber = materials.add(Color::srgb(0.27, 0.17, 0.10));
-    let warm_wood = materials.add(Color::srgb(0.42, 0.28, 0.14));
-    let thatch = materials.add(Color::srgb(0.49, 0.39, 0.21));
+    let timber = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.27, 0.17, 0.10),
+        perceptual_roughness: 0.95,
+        ..default()
+    });
+    let warm_wood = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.42, 0.28, 0.14),
+        perceptual_roughness: 0.95,
+        ..default()
+    });
+    let thatch = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.85, 0.72, 0.44),
+        cull_mode: None,
+        perceptual_roughness: 1.0,
+        ..default()
+    });
     // A modest timber farm building, inside the old house collision footprint.
-    let cube = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
+    let cube = meshes.add(crate::art::softened_box(Vec3::ONE, 0.08));
     commands.spawn((
         Mesh3d(cube.clone()),
         MeshMaterial3d(timber.clone()),
         Transform::from_xyz(2.0, 1.25, 0.0).with_scale(Vec3::new(3.5, 2.1, 5.0)),
     ));
-    // Board rhythm, posts and a recessed dark doorway read at walking distance.
-    for i in 0..18 {
-        let z = -2.4 + i as f32 * 0.28;
-        for x in [0.24, 3.76] {
+    // Rounded horizontal wall timbers have alternating warm tones and irregular ends.
+    let log = meshes.add(Cylinder::new(0.13, 5.05).mesh().resolution(12));
+    let end_log = meshes.add(Cylinder::new(0.13, 3.55).mesh().resolution(12));
+    for row in 0..8 {
+        let y = 0.38 + row as f32 * 0.25;
+        let material = if row % 3 == 0 {
+            timber.clone()
+        } else {
+            warm_wood.clone()
+        };
+        for x in [0.29, 3.71] {
             commands.spawn((
-                Mesh3d(cube.clone()),
-                MeshMaterial3d(warm_wood.clone()),
-                Transform::from_xyz(x, 1.25, z).with_scale(Vec3::new(0.05, 2.08, 0.20)),
+                Mesh3d(log.clone()),
+                MeshMaterial3d(material.clone()),
+                Transform::from_xyz(x, y, 0.)
+                    .with_rotation(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)),
+            ));
+        }
+        // The front wall leaves a real visual recess around the doorway.
+        commands.spawn((
+            Mesh3d(end_log.clone()),
+            MeshMaterial3d(material.clone()),
+            Transform::from_xyz(2., y, -2.49)
+                .with_rotation(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2)),
+        ));
+        for x in [0.84, 3.16] {
+            commands.spawn((
+                Mesh3d(meshes.add(Cylinder::new(0.13, 1.18).mesh().resolution(12))),
+                MeshMaterial3d(material.clone()),
+                Transform::from_xyz(x, y, 2.49)
+                    .with_rotation(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2)),
             ));
         }
     }
@@ -263,16 +300,59 @@ fn spawn_farmstead(
         MeshMaterial3d(dark),
         Transform::from_xyz(2.0, 0.99, 2.51).with_scale(Vec3::new(0.85, 1.58, 0.02)),
     ));
-    // Two pitched roof planes plus original triangular gable meshes.
-    for sign in [-1.0, 1.0] {
+    // Continuous bowed thatch, an uneven eave fringe and a bound rounded ridge.
+    commands.spawn((
+        Mesh3d(meshes.add(crate::art::thatch_roof())),
+        MeshMaterial3d(thatch.clone()),
+        Transform::from_xyz(2., 0., 0.),
+    ));
+    let ridge: Vec<_> = (0..33)
+        .map(|i| {
+            let z = -2.88 + i as f32 * 0.18;
+            Vec3::new(2., 3.52 - 0.07 * (z / 2.85).powi(2), z)
+        })
+        .collect();
+    commands.spawn((
+        Mesh3d(meshes.add(crate::art::tube(&ridge, 0.09))),
+        MeshMaterial3d(thatch.clone()),
+        Transform::default(),
+    ));
+    let fringe = meshes.add(
+        Capsule3d::new(0.036, 0.19)
+            .mesh()
+            .longitudes(8)
+            .latitudes(4),
+    );
+    let fringe_count = if quality == VisualQuality::High {
+        70
+    } else {
+        35
+    };
+    for side in [-1., 1.] {
+        for i in 0..fringe_count {
+            let z = -2.78 + i as f32 * 5.56 / (fringe_count - 1) as f32;
+            commands.spawn((
+                Mesh3d(fringe.clone()),
+                MeshMaterial3d(thatch.clone()),
+                Transform::from_xyz(2. + side * 2.12, 2.23 - 0.04 * (z / 2.85).powi(2), z)
+                    .with_rotation(Quat::from_rotation_z(side * 0.16))
+                    .with_scale(Vec3::new(1., 0.7 + noise(i + 650) * 0.6, 1.)),
+            ));
+        }
+    }
+    let post = meshes.add(Cylinder::new(0.085, 1.7).mesh().resolution(12));
+    for x in [1.52, 2.48] {
         commands.spawn((
-            Mesh3d(cube.clone()),
-            MeshMaterial3d(thatch.clone()),
-            Transform::from_xyz(2.0 + sign * 0.99, 2.74, 0.0)
-                .with_rotation(Quat::from_rotation_z(-sign * 0.58))
-                .with_scale(Vec3::new(2.48, 0.18, 5.6)),
+            Mesh3d(post.clone()),
+            MeshMaterial3d(warm_wood.clone()),
+            Transform::from_xyz(x, 1.03, 2.57),
         ));
     }
+    commands.spawn((
+        Mesh3d(meshes.add(crate::art::softened_box(Vec3::new(1.15, 0.16, 0.20), 0.04))),
+        MeshMaterial3d(warm_wood.clone()),
+        Transform::from_xyz(2., 1.86, 2.57),
+    ));
     let gable = Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::default(),
@@ -297,11 +377,20 @@ fn spawn_pines(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
+    quality: VisualQuality,
 ) {
-    let timber = materials.add(Color::srgb(0.27, 0.17, 0.10));
+    let timber = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.27, 0.17, 0.10),
+        perceptual_roughness: 0.95,
+        ..default()
+    });
     // Shared pine positions also define trunk clearance for first-person walking.
-    let foliage = materials.add(Color::srgb(0.12, 0.25, 0.16));
-    let pine = meshes.add(Cone::new(0.85, 1.7));
+    let foliage = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.16, 0.29, 0.16),
+        perceptual_roughness: 1.0,
+        ..default()
+    });
+    let pine = meshes.add(crate::art::foliage());
     let trunk = meshes.add(Cylinder::new(0.13, 2.4));
     for i in 0..9 {
         let Vec2 { x, y: z } = pine_position(i);
@@ -310,13 +399,27 @@ fn spawn_pines(
             MeshMaterial3d(timber.clone()),
             Transform::from_xyz(x, 1.2, z),
         ));
-        for layer in 0..3 {
-            let scale = (1.0 - layer as f32 * 0.20) * (0.85 + noise(i + 300) * 0.35);
-            commands.spawn((
-                Mesh3d(pine.clone()),
-                MeshMaterial3d(foliage.clone()),
-                Transform::from_xyz(x, 1.7 + layer as f32 * 0.7, z).with_scale(Vec3::splat(scale)),
-            ));
+        for layer in 0..5 {
+            let h = 1.20 + layer as f32 * 0.48;
+            let width = (0.95 - layer as f32 * 0.145) * (0.90 + noise(i + 300) * 0.2);
+            let branches = if quality == VisualQuality::High { 5 } else { 3 };
+            for bough in 0..branches {
+                let angle = bough as f32 * std::f32::consts::TAU / branches as f32
+                    + layer as f32 * 0.71
+                    + i as f32;
+                let offset = Vec2::new(angle.cos(), angle.sin()) * width * 0.40;
+                commands.spawn((
+                    Mesh3d(pine.clone()),
+                    MeshMaterial3d(foliage.clone()),
+                    Transform::from_xyz(
+                        x + offset.x,
+                        h + noise(i * 31 + layer * 5 + bough) * 0.16,
+                        z + offset.y,
+                    )
+                    .with_rotation(Quat::from_rotation_y(angle))
+                    .with_scale(Vec3::new(width * 0.72, 0.34, width * 0.52)),
+                ));
+            }
         }
     }
 }

@@ -182,7 +182,7 @@ fn setup(
 ) {
     let soil = materials.add(Color::srgb(0.28, 0.19, 0.11));
     let furrow = materials.add(Color::srgb(0.39, 0.28, 0.15));
-    let cube = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
+    let cube = meshes.add(crate::art::softened_box(Vec3::ONE, 0.09));
     commands.spawn((
         Mesh3d(cube.clone()),
         MeshMaterial3d(soil),

@@ -60,8 +60,16 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let wool = materials.add(Color::srgb(0.23, 0.31, 0.21));
-    let skin = materials.add(Color::srgb(0.65, 0.43, 0.30));
+    let wool = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.23, 0.31, 0.21),
+        perceptual_roughness: 0.95,
+        ..default()
+    });
+    let skin = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.65, 0.43, 0.30),
+        perceptual_roughness: 0.95,
+        ..default()
+    });
     let wood = materials.add(StandardMaterial {
         base_color: Color::srgb(0.45, 0.27, 0.13),
         perceptual_roughness: 0.9,
@@ -75,17 +83,13 @@ fn setup(
     });
     commands
         .spawn((
-            Mesh3d(meshes.add(Cuboid::new(0.48, 1.2, 0.35))),
-            MeshMaterial3d(wool),
+            Mesh3d(meshes.add(crate::art::tunic())),
+            MeshMaterial3d(wool.clone()),
             Transform::default(),
             WorkerVisual(1),
         ))
         .with_children(|p| {
-            p.spawn((
-                Mesh3d(meshes.add(Sphere::new(0.19))),
-                MeshMaterial3d(skin),
-                Transform::from_xyz(0.0, 0.78, 0.0),
-            ));
+            crate::art::human_parts(p, &mut meshes, &mut materials, wool, skin);
             p.spawn((
                 Transform::from_xyz(0.34, 0.3, 0.1),
                 Visibility::default(),
@@ -110,7 +114,7 @@ fn setup(
         ..default()
     });
     let trunk = meshes.add(Cylinder::new(0.12, 1.8));
-    let crown = meshes.add(Sphere::new(0.85).mesh().ico(2).expect("valid crown mesh"));
+    let crown = meshes.add(crate::art::foliage());
     let stump = meshes.add(Cylinder::new(0.14, 0.30));
     for (i, p) in TREE_POSITIONS.iter().enumerate() {
         commands
@@ -121,11 +125,25 @@ fn setup(
                 TreeVisual(i),
             ))
             .with_children(|parent| {
-                parent.spawn((
-                    Mesh3d(crown.clone()),
-                    MeshMaterial3d(leaf.clone()),
-                    Transform::from_xyz(0.0, 1.15, 0.0),
-                ));
+                for (j, offset) in [
+                    Vec3::new(0., 1.15, 0.),
+                    Vec3::new(-0.30, 1.02, 0.15),
+                    Vec3::new(0.30, 1.1, -0.15),
+                    Vec3::new(0.04, 1.45, 0.06),
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    parent.spawn((
+                        Mesh3d(crown.clone()),
+                        MeshMaterial3d(leaf.clone()),
+                        Transform::from_translation(offset).with_scale(Vec3::new(
+                            if j == 0 { 0.72 } else { 0.50 },
+                            if j == 3 { 0.55 } else { 0.68 },
+                            0.60,
+                        )),
+                    ));
+                }
             });
         commands.spawn((
             Mesh3d(stump.clone()),
@@ -151,7 +169,7 @@ fn setup(
         Transform::default(),
         SelectionVisual,
     ));
-    let pad = meshes.add(Cuboid::new(1.7, 0.06, 1.0));
+    let pad = meshes.add(crate::art::softened_box(Vec3::new(1.7, 0.06, 1.0), 0.02));
     let stone = materials.add(Color::srgb(0.64, 0.62, 0.53));
     for p in [STOCKPILE, BUILD_SITE] {
         commands.spawn((
@@ -167,7 +185,7 @@ fn setup(
     ];
     for (i, (offset, size)) in parts.into_iter().enumerate() {
         commands.spawn((
-            Mesh3d(meshes.add(Cuboid::from_size(size))),
+            Mesh3d(meshes.add(crate::art::softened_box(size, 0.025))),
             MeshMaterial3d(wood.clone()),
             Transform::from_translation(Vec3::new(BUILD_SITE.x, 0.0, BUILD_SITE.y) + offset),
             Visibility::Hidden,
@@ -275,22 +293,26 @@ fn spawn_helper_visual(
     if visuals.iter().any(|(_, v)| v.0 == 2) {
         return;
     }
-    let tunic = materials.add(Color::srgb(0.20, 0.37, 0.48));
-    let skin = materials.add(Color::srgb(0.65, 0.43, 0.30));
+    let tunic = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.20, 0.37, 0.48),
+        perceptual_roughness: 0.95,
+        ..default()
+    });
+    let skin = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.65, 0.43, 0.30),
+        perceptual_roughness: 0.95,
+        ..default()
+    });
     commands
         .spawn((
             WorkerVisual(2),
             Name::new("Resident 2 coastal worker"),
-            Mesh3d(meshes.add(Cuboid::new(0.48, 1.2, 0.35))),
-            MeshMaterial3d(tunic),
+            Mesh3d(meshes.add(crate::art::tunic())),
+            MeshMaterial3d(tunic.clone()),
             Transform::from_xyz(helper.position.x, 0.9, helper.position.y),
         ))
         .with_children(|p| {
-            p.spawn((
-                Mesh3d(meshes.add(Sphere::new(0.19))),
-                MeshMaterial3d(skin),
-                Transform::from_xyz(0.0, 0.78, 0.0),
-            ));
+            crate::art::human_parts(p, &mut meshes, &mut materials, tunic, skin);
         });
 }
 type AxeTransforms<'w, 's> = Query<

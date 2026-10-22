@@ -1,4 +1,5 @@
 //! One world and simulation, observed through two camera modes.
+mod art;
 mod calendar;
 mod camera;
 mod farming;

@@ -103,12 +103,19 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let tunic = materials.add(Color::srgb(0.30, 0.34, 0.43));
-    let skin = materials.add(Color::srgb(0.68, 0.48, 0.34));
-    let leather = materials.add(Color::srgb(0.25, 0.18, 0.12));
+    let tunic = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.30, 0.34, 0.43),
+        perceptual_roughness: 0.95,
+        ..default()
+    });
+    let skin = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.68, 0.48, 0.34),
+        perceptual_roughness: 0.95,
+        ..default()
+    });
     let cloth = materials.add(Color::srgb(0.75, 0.69, 0.51));
     let pale = materials.add(Color::srgb(0.85, 0.83, 0.74));
-    let cube = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
+    let cube = meshes.add(crate::art::softened_box(Vec3::ONE, 0.09));
     commands
         .spawn((
             ShoreTrader,
@@ -117,28 +124,15 @@ fn setup(
             Visibility::Inherited,
         ))
         .with_children(|trader| {
-            trader.spawn((
-                Mesh3d(cube.clone()),
-                MeshMaterial3d(tunic),
-                Transform::from_xyz(0.0, 0.8, 0.0).with_scale(Vec3::new(0.48, 0.85, 0.36)),
-            ));
-            trader.spawn((
-                Mesh3d(meshes.add(Sphere::new(0.19))),
-                MeshMaterial3d(skin),
-                Transform::from_xyz(0.0, 1.42, 0.0),
-            ));
-            trader.spawn((
-                Mesh3d(cube.clone()),
-                MeshMaterial3d(leather.clone()),
-                Transform::from_xyz(0.0, 0.64, 0.0).with_scale(Vec3::new(0.5, 0.06, 0.38)),
-            ));
-            for x in [-0.13, 0.13] {
-                trader.spawn((
-                    Mesh3d(cube.clone()),
-                    MeshMaterial3d(leather.clone()),
-                    Transform::from_xyz(x, 0.25, 0.0).with_scale(Vec3::new(0.14, 0.5, 0.18)),
-                ));
-            }
+            trader
+                .spawn((
+                    Mesh3d(meshes.add(crate::art::tunic())),
+                    MeshMaterial3d(tunic.clone()),
+                    Transform::from_xyz(0., 0.7, 0.),
+                ))
+                .with_children(|body| {
+                    crate::art::human_parts(body, &mut meshes, &mut materials, tunic, skin);
+                });
         });
     // A small cloth spread identifies the visitor's stock without a fictional harbour build.
     commands.spawn((

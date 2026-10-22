@@ -174,7 +174,7 @@ fn setup(
     let rope = materials.add(Color::srgb(0.64, 0.58, 0.39));
     let fresh = materials.add(Color::srgb(0.47, 0.63, 0.64));
     let preserved = materials.add(Color::srgb(0.65, 0.48, 0.29));
-    let cube = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
+    let cube = meshes.add(crate::art::softened_box(Vec3::ONE, 0.09));
     commands
         .spawn((
             Name::new("Salting work table"),
