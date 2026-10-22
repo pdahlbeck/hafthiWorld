@@ -7,7 +7,7 @@ use bevy::prelude::*;
 pub const FUEL_SECONDS: f64 = 40.0;
 pub const FUEL_TARGET: usize = 3;
 pub const FUEL_STORE: Vec2 = Vec2::new(3.45, 3.1);
-#[derive(Debug, Default)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize, Clone)]
 pub struct Hearth {
     pub ordered: bool,
     pub burned: u64,

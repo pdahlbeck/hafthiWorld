@@ -31,16 +31,22 @@ impl Plugin for SimulationPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Settlement>()
             .init_resource::<SimulationClock>()
+            .init_resource::<crate::session::Session>()
             .add_systems(Startup, spawn_worker)
-            .add_systems(FixedUpdate, (invite_helper, simulate).chain());
+            .add_systems(
+                FixedUpdate,
+                (invite_helper, simulate)
+                    .chain()
+                    .run_if(crate::session::running),
+            );
     }
 }
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Tree {
     pub ordered: bool,
     pub felled: bool,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum LogLocation {
     InTree,
     Ground,
@@ -50,12 +56,12 @@ pub enum LogLocation {
     Home(u32),
     Burned(u32),
 }
-#[derive(Debug, Default)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize, Clone)]
 pub struct Construction {
     pub ordered: bool,
     pub complete: bool,
 }
-#[derive(Resource, Debug)]
+#[derive(Resource, Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct Settlement {
     pub trees: [Tree; TREE_POSITIONS.len()],
     pub logs: [LogLocation; TOTAL_LOGS],
@@ -139,9 +145,9 @@ pub fn ground_log_position(log: usize) -> Vec2 {
     TREE_POSITIONS[log / LOGS_PER_TREE]
         + Vec2::new((log % LOGS_PER_TREE) as f32 * 0.45 - 0.225, 0.5)
 }
-#[derive(Resource, Default)]
+#[derive(Resource, Default, serde::Serialize, serde::Deserialize, Clone)]
 pub struct SimulationClock(pub f64);
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Task {
     Coastal(CoastalTask),
     ToCrewRest,
@@ -224,22 +230,23 @@ impl Task {
         )
     }
 }
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 enum FarmJob {
     Sow,
     Reap,
     Haul,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum WorkerRole {
     #[default]
     General,
     Coastal,
 }
-#[derive(Component, Debug)]
+#[derive(Component, Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct Worker {
     pub id: u32,
     pub role: WorkerRole,
+    #[serde(with = "crate::session::vector")]
     pub position: Vec2,
     pub home_id: u32,
     pub task: Task,
@@ -276,6 +283,41 @@ impl Default for Worker {
     }
 }
 impl Worker {
+    pub(crate) fn valid_snapshot(&self) -> bool {
+        let limit = match self.task {
+            Task::ToTree | Task::Felling => TREE_POSITIONS.len(),
+            Task::ToSheep | Task::Shearing => crate::livestock::SHEEP_COUNT,
+            Task::LoadingSalt => crate::trade::SALT_UNITS,
+            Task::Coastal(crate::fishing::CoastalTask::LoadingBrineSalt) => {
+                crate::trade::SALT_UNITS
+            }
+            Task::Coastal(_) => crate::fishing::FISH_UNITS,
+            Task::ToWool | Task::LoadingWool | Task::ToTradeStore | Task::LoadingTradeWool => {
+                crate::livestock::WOOL_UNITS
+            }
+            Task::LoadingGrain | Task::ToFoodStore | Task::LoadingFood | Task::PreparingSeeds => {
+                crate::farming::GRAIN_UNITS
+            }
+            _ => TOTAL_LOGS,
+        };
+        self.target < limit
+            && self.position.is_finite()
+            && self.handling.is_finite()
+            && self.handling >= 0.0
+            && self.home_id == HOME_ID
+            && [
+                self.carrying,
+                self.carrying_grain,
+                self.carrying_wool,
+                self.carrying_salt,
+                self.carrying_fish,
+            ]
+            .iter()
+            .filter(|v| v.is_some())
+            .count()
+                <= 1
+    }
+
     pub fn for_home(home_id: u32) -> Self {
         Self {
             home_id,

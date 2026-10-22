@@ -18,7 +18,7 @@ impl Season {
         }
     }
 }
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct Calendar {
     pub year: u64,
     elapsed: f64,

@@ -6,7 +6,7 @@ pub const HOME_ID: u32 = 1;
 pub const HOME_DELIVERY: Vec2 = Vec2::new(2.0, 3.35);
 pub const PANTRY: Vec2 = Vec2::new(1.4, 3.05);
 pub const RATION_SECONDS: f64 = 40.0;
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct Household {
     pub id: u32,
     pub supply_ordered: bool,

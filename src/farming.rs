@@ -7,7 +7,7 @@ pub const FIELD_WORK: Vec2 = Vec2::new(5.0, 3.8);
 pub const SEED_UNITS: usize = 4;
 pub const GRAIN_UNITS: usize = 4;
 pub const GROW_SECONDS: f64 = 30.0;
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum CropPhase {
     #[default]
     Fallow,
@@ -27,14 +27,14 @@ impl CropPhase {
         }
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum SeedLocation {
     #[default]
     Stored,
     Carried,
     Sown,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum GrainLocation {
     Unproduced,
     Ground,
@@ -44,7 +44,7 @@ pub enum GrainLocation {
     Consumed(u32),
     SavedSeed,
 }
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct Farm {
     pub phase: CropPhase,
     pub seeds: SeedLocation,
