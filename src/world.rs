@@ -7,10 +7,7 @@ impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Daylight>()
             .add_systems(Startup, setup)
-            .add_systems(
-                Update,
-                (animate_meadow, animate_shore, daylight, seasonal_palette),
-            );
+            .add_systems(Update, (animate_meadow, daylight, seasonal_palette));
     }
 }
 
@@ -32,9 +29,6 @@ impl Default for Daylight {
 struct Sun;
 #[derive(Component)]
 struct GrassPatch(f32);
-#[derive(Component)]
-struct ShoreRipple(f32);
-
 // Small deterministic hash: identical scenery on every platform, no RNG dependency.
 pub(crate) fn noise(index: u32) -> f32 {
     let mut n = index.wrapping_add(0x9e3779b9);
@@ -43,20 +37,7 @@ pub(crate) fn noise(index: u32) -> f32 {
     (n ^ (n >> 16)) as f32 / u32::MAX as f32
 }
 
-/// Flat playable meadow enclosed by an irregular limestone skirt. The existing
-/// original clearing and authored worker paths stay on the level top at y=.2.
-pub(crate) fn coast_point(i: usize, scale: f32) -> Vec3 {
-    let angle = i as f32 * std::f32::consts::TAU / 64.0;
-    let c = angle.cos();
-    let s = angle.sin();
-    let edge = 1.0 + 0.045 * (angle * 5.0).sin() + 0.025 * (angle * 11.0).cos();
-    Vec3::new(
-        c.signum() * c.abs().sqrt() * 11.2 * edge * scale,
-        0.2,
-        s.signum() * s.abs().sqrt() * 8.3 * edge * scale,
-    )
-}
-fn grass_mesh() -> Mesh {
+pub(crate) fn grass_mesh() -> Mesh {
     let mut points = Vec::new();
     let mut normals = Vec::new();
     let mut colors = Vec::new();
@@ -100,46 +81,25 @@ fn grass_mesh() -> Mesh {
     .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colors)
     .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uv)
 }
-fn ripple_mesh(scale: f32) -> Mesh {
-    let mut points = Vec::new();
-    for i in 0..64 {
-        if noise(i as u32 + 500) < 0.35 {
-            continue;
-        }
-        let a = coast_point(i, scale);
-        let b = coast_point((i + 1) % 64, scale);
-        let c = coast_point(i, scale + 0.005);
-        let d = coast_point((i + 1) % 64, scale + 0.005);
-        for p in [a, b, c, b, d, c] {
-            points.push([p.x, 0.0, p.z]);
-        }
-    }
-    let count = points.len();
-    Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::default(),
-    )
-    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, points)
-    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[0.0, 1.0, 0.0]; count])
-    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, vec![[0.0, 0.0]; count])
-}
-fn animate_shore(time: Res<Time>, mut ripples: Query<(&ShoreRipple, &mut Transform)>) {
-    for (ripple, mut transform) in &mut ripples {
-        let wave = (time.elapsed_secs() * 0.55 + ripple.0).sin();
-        transform.scale = Vec3::new(1.0 + wave * 0.008, 1.0, 1.0 + wave * 0.008);
-        transform.translation.y = -0.32 + wave * 0.002;
-    }
-}
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     quality: Res<VisualQuality>,
     server: Res<AssetServer>,
+    mut ground_materials: ResMut<Assets<crate::terrain_material::GroundMaterial>>,
 ) {
-    let ground = crate::coast::spawn(&mut commands, &mut meshes, &mut materials, &server);
-    commands.entity(ground).insert(SeasonalSurface::Meadow);
-    spawn_coast(&mut commands, &mut meshes, &mut materials);
+    let ground = crate::landscape::spawn(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        &server,
+        *quality,
+        &mut ground_materials,
+    );
+    for entity in ground {
+        commands.entity(entity).insert(SeasonalSurface::Meadow);
+    }
     spawn_farmstead(
         &mut commands,
         &mut meshes,
@@ -170,28 +130,6 @@ fn setup(
         affects_lightmapped_meshes: true,
     });
 }
-fn spawn_coast(
-    commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
-) {
-    let foam = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.46, 0.63, 0.57),
-        cull_mode: None,
-        perceptual_roughness: 0.6,
-        ..default()
-    });
-    for i in 0..3 {
-        commands.spawn((
-            Mesh3d(meshes.add(ripple_mesh(1.12 + i as f32 * 0.16))),
-            MeshMaterial3d(foam.clone()),
-            Transform::from_xyz(0.0, -0.32, 0.0),
-            ShoreRipple(i as f32 * 1.8),
-            bevy::light::NotShadowCaster,
-        ));
-    }
-}
-
 fn spawn_farmstead(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
@@ -210,49 +148,63 @@ fn spawn_farmstead(
         ..crate::coast::material(server, "wood")
     });
     let thatch = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.85, 0.72, 0.44),
+        base_color: Color::srgb(0.69, 0.66, 0.57),
         cull_mode: None,
+        double_sided: true,
+        diffuse_transmission: 0.35,
         perceptual_roughness: 1.0,
         ..default()
     });
-    // A modest timber farm building, inside the old house collision footprint.
-    let cube = meshes.add(crate::art::softened_box(Vec3::ONE, 0.08));
+    // Earth-toned infill and weathered posts retain the owned home's exact footprint.
+    let cube = meshes.add(crate::art::softened_box(Vec3::ONE, 0.035));
+    let infill = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.68, 0.65, 0.55),
+        perceptual_roughness: 1.,
+        ..crate::coast::material(server, "limestone")
+    });
     commands.spawn((
         Mesh3d(cube.clone()),
-        MeshMaterial3d(timber.clone()),
-        Transform::from_xyz(2.0, 1.25, 0.0).with_scale(Vec3::new(3.5, 2.1, 5.0)),
+        MeshMaterial3d(infill),
+        Transform::from_xyz(2., 1.25, 0.).with_scale(Vec3::new(3.5, 2.1, 5.)),
     ));
-    // Rounded horizontal wall timbers have alternating warm tones and irregular ends.
-    let log = meshes.add(Cylinder::new(0.13, 5.05).mesh().resolution(12));
-    let end_log = meshes.add(Cylinder::new(0.13, 3.55).mesh().resolution(12));
-    for row in 0..8 {
-        let y = 0.38 + row as f32 * 0.25;
-        let material = if row % 3 == 0 {
-            timber.clone()
-        } else {
-            warm_wood.clone()
-        };
-        for x in [0.29, 3.71] {
+    let foundation = materials.add(crate::coast::material(server, "limestone"));
+    for x in [0.27, 3.73] {
+        commands.spawn((
+            Mesh3d(cube.clone()),
+            MeshMaterial3d(foundation.clone()),
+            Transform::from_xyz(x, 0.36, 0.).with_scale(Vec3::new(0.27, 0.32, 5.15)),
+        ));
+        for z in [-2.5, -0.83, 0.83, 2.5] {
             commands.spawn((
-                Mesh3d(log.clone()),
-                MeshMaterial3d(material.clone()),
-                Transform::from_xyz(x, y, 0.)
-                    .with_rotation(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)),
+                Mesh3d(cube.clone()),
+                MeshMaterial3d(timber.clone()),
+                Transform::from_xyz(x, 1.34, z).with_scale(Vec3::new(0.13, 1.95, 0.14)),
             ));
         }
-        // The front wall leaves a real visual recess around the doorway.
-        commands.spawn((
-            Mesh3d(end_log.clone()),
-            MeshMaterial3d(material.clone()),
-            Transform::from_xyz(2., y, -2.49)
-                .with_rotation(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2)),
-        ));
-        for x in [0.84, 3.16] {
+        for y in [0.51, 2.20] {
             commands.spawn((
-                Mesh3d(meshes.add(Cylinder::new(0.13, 1.18).mesh().resolution(12))),
-                MeshMaterial3d(material.clone()),
-                Transform::from_xyz(x, y, 2.49)
-                    .with_rotation(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2)),
+                Mesh3d(cube.clone()),
+                MeshMaterial3d(timber.clone()),
+                Transform::from_xyz(x, y, 0.).with_scale(Vec3::new(0.15, 0.12, 5.1)),
+            ));
+        }
+        for z in [-1.65, 1.65] {
+            commands.spawn((
+                Mesh3d(meshes.add(crate::art::tube(
+                    &[Vec3::new(x, 0.55, z - 0.70), Vec3::new(x, 2.15, z + 0.70)],
+                    0.052,
+                ))),
+                MeshMaterial3d(timber.clone()),
+                Transform::default(),
+            ));
+        }
+    }
+    for z in [-2.52, 2.52] {
+        for x in [0.28, 1.50, 2.50, 3.72] {
+            commands.spawn((
+                Mesh3d(cube.clone()),
+                MeshMaterial3d(timber.clone()),
+                Transform::from_xyz(x, 1.32, z).with_scale(Vec3::new(0.13, 1.95, 0.14)),
             ));
         }
     }
@@ -275,12 +227,12 @@ fn spawn_farmstead(
         })
         .collect();
     commands.spawn((
-        Mesh3d(meshes.add(crate::art::tube(&ridge, 0.09))),
+        Mesh3d(meshes.add(crate::art::tube(&ridge, 0.045))),
         MeshMaterial3d(thatch.clone()),
         Transform::default(),
     ));
     let fringe = meshes.add(
-        Capsule3d::new(0.036, 0.19)
+        Capsule3d::new(0.012, 0.19)
             .mesh()
             .longitudes(8)
             .latitudes(4),
@@ -325,6 +277,17 @@ fn spawn_farmstead(
     )
     .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[0.0, 0.0, 1.0]; 3])
     .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, vec![[0.0, 0.0]; 3]);
+    for z in [-2.52, 2.52] {
+        for i in 0..15 {
+            let x = 0.32 + i as f32 * 0.24;
+            let h = (1.05 - (x - 2.).abs() * 0.60).max(0.04);
+            commands.spawn((
+                Mesh3d(cube.clone()),
+                MeshMaterial3d(timber.clone()),
+                Transform::from_xyz(x, 2.3 + h * 0.5, z).with_scale(Vec3::new(0.025, h, 0.025)),
+            ));
+        }
+    }
     let gable = meshes.add(gable);
     for (z, angle) in [(2.5, 0.0), (-2.5, std::f32::consts::PI)] {
         commands.spawn((
@@ -351,6 +314,8 @@ fn spawn_pines(
     let foliage = materials.add(StandardMaterial {
         base_color: Color::srgb(0.24, 0.34, 0.25),
         cull_mode: None,
+        double_sided: true,
+        diffuse_transmission: 0.35,
         perceptual_roughness: 1.0,
         ..default()
     });
@@ -413,6 +378,8 @@ fn spawn_grass(
     let grass_mat = materials.add(StandardMaterial {
         base_color: Color::srgb(0.61, 0.66, 0.43),
         cull_mode: None,
+        double_sided: true,
+        diffuse_transmission: 0.35,
         perceptual_roughness: 1.0,
         ..default()
     });
@@ -497,15 +464,7 @@ fn daylight(
 
 // The movement shore follows the actual mesh, with a small dry-land setback.
 fn inside_shore(p: Vec2) -> bool {
-    let mut inside = false;
-    for i in 0..64 {
-        let a = coast_point(i, 0.94);
-        let b = coast_point((i + 1) % 64, 0.94);
-        if (a.z > p.y) != (b.z > p.y) && p.x < (b.x - a.x) * (p.y - a.z) / (b.z - a.z) + a.x {
-            inside = !inside;
-        }
-    }
-    inside
+    crate::landscape::dry(p)
 }
 fn pine_position(i: u32) -> Vec2 {
     Vec2::new(
@@ -515,6 +474,8 @@ fn pine_position(i: u32) -> Vec2 {
 }
 pub fn walkable(p: Vec2) -> bool {
     inside_shore(p)
+        && !crate::landscape::tree_blocks(p)
+        && !crate::landscape::wall_blocks(p)
         && !crate::livestock::fence_blocks(p)
         && !(p.x > -0.10 && p.x < 4.10 && p.y.abs() < 2.85)
         && !(p.x > -8.85 && p.x < -5.15 && p.y > 0.05 && p.y < 1.95)
@@ -543,10 +504,12 @@ mod tests {
     #[test]
     fn coast_and_pine_collision_match_rendered_scenery() {
         assert!(inside_shore(Vec2::ZERO));
-        for i in 0..64 {
-            let outer = coast_point(i, 1.08);
-            assert!(!walkable(Vec2::new(outer.x, outer.z)));
+        for p in [Vec2::new(-18., 13.), Vec2::new(0., 15.), Vec2::new(70., 0.)] {
+            assert!(!walkable(p));
         }
+        assert!(
+            walkable(Vec2::new(0., -20.)) || crate::landscape::tree_blocks(Vec2::new(0., -20.))
+        );
         for i in 0..9 {
             assert!(!walkable(pine_position(i)));
         }
@@ -568,7 +531,7 @@ mod tests {
         for (start, movement) in [
             (Vec2::new(-2.0, 0.0), Vec2::new(10.0, 0.0)),
             (Vec2::new(-7.0, -2.0), Vec2::new(0.0, 8.0)),
-            (Vec2::new(-3.0, 4.0), Vec2::new(-20.0, 0.0)),
+            (Vec2::new(-3.0, 4.0), Vec2::new(-80.0, 0.0)),
         ] {
             let end = slide(start, movement);
             assert!(walkable(end));
@@ -578,7 +541,7 @@ mod tests {
 }
 
 #[derive(Component)]
-enum SeasonalSurface {
+pub(crate) enum SeasonalSurface {
     Meadow,
     Grass,
 }
@@ -587,6 +550,7 @@ fn seasonal_palette(
     surfaces: Query<(&SeasonalSurface, &MeshMaterial3d<StandardMaterial>)>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut last: Local<Option<Season>>,
+    mut ground: Option<ResMut<Assets<crate::terrain_material::GroundMaterial>>>,
 ) {
     let Some(settlement) = settlement else {
         return;
@@ -614,6 +578,19 @@ fn seasonal_palette(
                 }
                 SeasonalSurface::Grass => grass,
             };
+        }
+    }
+    if let Some(ground) = ground.as_mut() {
+        let c = meadow.to_srgba();
+        let tint = Vec4::new(
+            0.80 + c.red * 0.4,
+            0.80 + c.green * 0.4,
+            0.80 + c.blue * 0.4,
+            1.,
+        );
+        for (_, material) in ground.iter_mut() {
+            material.base.base_color = Color::srgb(tint.x, tint.y, tint.z);
+            material.extension.tint = tint;
         }
     }
     *last = Some(season);

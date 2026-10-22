@@ -1,6 +1,7 @@
 //! Two views of one running world. Camera transitions never touch simulation state.
 use crate::world;
 use bevy::{
+    camera::Hdr,
     input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll},
     prelude::*,
     window::{CursorGrabMode, CursorOptions, PrimaryWindow},
@@ -43,10 +44,10 @@ impl Default for CameraRig {
             mode: CameraMode::Strategy,
             captured: false,
             strategy: StrategyView {
-                yaw: 0.5,
-                pitch: 0.5,
-                distance: 28.0,
-                focus: Vec3::ZERO,
+                yaw: -1.0,
+                pitch: 0.50,
+                distance: 32.0,
+                focus: Vec3::new(0., 0., 1.5),
             },
             position: Vec2::new(-4.0, 4.8),
             yaw: 0.0,
@@ -73,27 +74,51 @@ impl CameraRig {
                 ) * s.distance;
                 Transform::from_translation(s.focus + offset).looking_at(s.focus, Vec3::Y)
             }
-            CameraMode::FirstPerson => Transform::from_xyz(self.position.x, 1.85, self.position.y)
-                .with_rotation(Quat::from_euler(EulerRot::YXZ, self.yaw, self.pitch, 0.0)),
+            CameraMode::FirstPerson => Transform::from_xyz(
+                self.position.x,
+                crate::landscape::height(self.position) + 1.65,
+                self.position.y,
+            )
+            .with_rotation(Quat::from_euler(EulerRot::YXZ, self.yaw, self.pitch, 0.0)),
         }
     }
 }
 #[derive(Component)]
 struct WorldCamera;
-fn setup(mut commands: Commands, rig: Res<CameraRig>) {
-    commands.spawn((
+fn setup(
+    mut commands: Commands,
+    rig: Res<CameraRig>,
+    quality: Option<Res<crate::performance::VisualQuality>>,
+) {
+    let mut camera = commands.spawn((
         Camera3d::default(),
         rig.transform(),
         WorldCamera,
         DistanceFog {
             color: Color::srgb(0.64, 0.75, 0.76),
             falloff: FogFalloff::Linear {
-                start: 28.0,
-                end: 100.0,
+                start: 38.0,
+                end: 135.0,
             },
             ..default()
         },
     ));
+    if quality.is_some_and(|q| *q == crate::performance::VisualQuality::High) {
+        camera.insert((
+            Hdr,
+            Msaa::Off,
+            bevy::pbr::ScreenSpaceAmbientOcclusion {
+                radius: 0.6,
+                constant_object_thickness: 0.10,
+                quality_level: bevy::pbr::ScreenSpaceAmbientOcclusionQualityLevel::Medium,
+            },
+            bevy::anti_alias::taa::TemporalAntiAliasing::default(),
+            bevy::anti_alias::contrast_adaptive_sharpening::ContrastAdaptiveSharpening {
+                sharpening_strength: 0.45,
+                ..default()
+            },
+        ));
+    }
 }
 fn axis(keys: &ButtonInput<KeyCode>, positive: KeyCode, negative: KeyCode) -> f32 {
     f32::from(keys.pressed(positive)) - f32::from(keys.pressed(negative))
@@ -150,8 +175,8 @@ fn controls(
                     - input.scroll.delta.y * 2.0;
                 s.focus.x += axis(&input.keys, KeyCode::ArrowRight, KeyCode::ArrowLeft) * dt * 5.0;
                 s.focus.z -= axis(&input.keys, KeyCode::ArrowUp, KeyCode::ArrowDown) * dt * 5.0;
-                s.focus.x = s.focus.x.clamp(-8.0, 8.0);
-                s.focus.z = s.focus.z.clamp(-5.0, 5.0);
+                s.focus.x = s.focus.x.clamp(-45.0, 45.0);
+                s.focus.z = s.focus.z.clamp(-65.0, 14.0);
                 s.pitch = s.pitch.clamp(0.15, 1.3);
                 s.distance = s.distance.clamp(6.0, 90.0);
             }

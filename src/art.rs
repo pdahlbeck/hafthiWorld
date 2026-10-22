@@ -147,7 +147,7 @@ pub fn thatch_roof() -> Mesh {
             let grain = (v * 42. * std::f32::consts::TAU).cos() * 0.06;
             let patch = (u * 31. + v * 17.).sin() * (v * 43.).sin() * 0.025;
             let light = 0.82 + grain + patch;
-            [light, light * 0.81, light * 0.47, 1.]
+            [light, light * 0.95, light * 0.86, 1.]
         },
         true,
     )
