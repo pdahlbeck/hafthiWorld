@@ -8,6 +8,7 @@ mod hearth;
 mod household;
 mod inspection;
 mod livestock;
+mod motion;
 mod orders;
 mod performance;
 mod presentation;

@@ -27,7 +27,7 @@ impl Plugin for PresentationPlugin {
                 Update,
                 (
                     spawn_helper_visual,
-                    sync_worker,
+                    (sync_worker, animate_residents).chain(),
                     sync_logs,
                     sync_trees,
                     sync_construction,
@@ -89,23 +89,25 @@ fn setup(
             WorkerVisual(1),
         ))
         .with_children(|p| {
-            crate::art::human_parts(p, &mut meshes, &mut materials, wool, skin);
-            p.spawn((
-                Transform::from_xyz(0.34, 0.3, 0.1),
-                Visibility::default(),
-                AxeVisual,
-            ))
-            .with_children(|axe| {
-                axe.spawn((
-                    Mesh3d(meshes.add(Cuboid::new(0.035, 0.45, 0.035))),
-                    MeshMaterial3d(wood.clone()),
-                    Transform::default(),
-                ));
-                axe.spawn((
-                    Mesh3d(meshes.add(Cuboid::new(0.19, 0.12, 0.06))),
-                    MeshMaterial3d(steel),
-                    Transform::from_xyz(0.07, 0.20, 0.0),
-                ));
+            let hand = crate::art::human_parts(p, &mut meshes, &mut materials, wool, skin);
+            p.commands().entity(hand).with_children(|hand| {
+                hand.spawn((
+                    Transform::from_xyz(0.0, -0.25, 0.03),
+                    Visibility::default(),
+                    AxeVisual,
+                ))
+                .with_children(|axe| {
+                    axe.spawn((
+                        Mesh3d(meshes.add(Cuboid::new(0.035, 0.45, 0.035))),
+                        MeshMaterial3d(wood.clone()),
+                        Transform::default(),
+                    ));
+                    axe.spawn((
+                        Mesh3d(meshes.add(Cuboid::new(0.19, 0.12, 0.06))),
+                        MeshMaterial3d(steel),
+                        Transform::from_xyz(0.07, 0.20, 0.0),
+                    ));
+                });
             });
         });
     let leaf = materials.add(StandardMaterial {
@@ -331,29 +333,31 @@ fn sync_worker(
         let Some(w) = workers.iter().find(|w| w.id == visual.0) else {
             continue;
         };
-        let previous = Vec2::new(t.translation.x, t.translation.z);
-        let direction = w.position - previous;
-        if direction.length_squared() > 0.00001 {
-            t.rotation = Quat::from_rotation_y(direction.x.atan2(direction.y));
-        }
+        t.rotation = Quat::from_rotation_y(w.facing);
         t.translation = Vec3::new(w.position.x, 0.9, w.position.y);
     }
     let Some(w) = workers.iter().find(|w| w.id == 1) else {
         return;
     };
     for (mut axe, mut visible) in &mut axes {
-        *visible = if matches!(
-            w.task,
-            Task::ToFuelStore
-                | Task::LoadingFuel
-                | Task::ToFuelHome
-                | Task::UnloadingFuel
-                | Task::ToFoodStore
-                | Task::LoadingFood
-                | Task::ToHome
-                | Task::UnloadingFood
-                | Task::FromHome
-        ) || w.task.tending_sheep()
+        *visible = if w.carrying.is_some()
+            || w.carrying_grain.is_some()
+            || w.carrying_wool.is_some()
+            || w.carrying_salt.is_some()
+            || w.carrying_fish.is_some()
+            || matches!(
+                w.task,
+                Task::ToFuelStore
+                    | Task::LoadingFuel
+                    | Task::ToFuelHome
+                    | Task::UnloadingFuel
+                    | Task::ToFoodStore
+                    | Task::LoadingFood
+                    | Task::ToHome
+                    | Task::UnloadingFood
+                    | Task::FromHome
+            )
+            || w.task.tending_sheep()
             || w.task.trading()
             || matches!(w.task, Task::Coastal(_))
             || matches!(
@@ -375,12 +379,32 @@ fn sync_worker(
             Visibility::Visible
         };
         axe.rotation = Quat::from_rotation_z(if w.task == Task::Felling {
-            (clock.0 as f32 * 9.0).sin() * 0.8
+            (clock.0 as f32 * 9.0).sin() * 0.15
         } else {
             0.0
         });
     }
 }
+fn animate_residents(
+    clock: Res<SimulationClock>,
+    settlement: Res<Settlement>,
+    workers: Query<&Worker>,
+    parents: Query<&WorkerVisual>,
+    mut limbs: Query<(&crate::art::Limb, &ChildOf, &mut Transform)>,
+) {
+    for (limb, parent, mut t) in &mut limbs {
+        let Ok(visual) = parents.get(parent.parent()) else {
+            continue;
+        };
+        let Some(worker) = workers.iter().find(|w| w.id == visual.0) else {
+            continue;
+        };
+        let pose = crate::motion::pose(worker, &settlement, clock.0, limb.side, limb.arm);
+        t.rotation = pose.0;
+        t.scale = pose.1;
+    }
+}
+
 fn sync_logs(
     settlement: Res<Settlement>,
     workers: Query<&Worker>,
@@ -683,6 +707,86 @@ mod tests {
             ));
         app.update();
         app
+    }
+    #[test]
+    fn actual_hauler_limbs_pause_and_restore_with_saved_heading_and_clock() {
+        let mut app = crew_app();
+        let worker = app
+            .world_mut()
+            .query::<(Entity, &Worker)>()
+            .iter(app.world())
+            .find(|(_, w)| w.id == 1)
+            .unwrap()
+            .0;
+        app.world_mut()
+            .resource_mut::<Settlement>()
+            .request_harvest(0);
+        let mut saw_walking = false;
+        for tick in 0..600 {
+            if tick % 7 == 0 {
+                app.world_mut().resource_mut::<CameraRig>().toggle();
+            }
+            app.update();
+            let w = app.world().get::<Worker>(worker).unwrap();
+            saw_walking |= crate::motion::walking(w.task);
+            if w.carrying.is_some() {
+                break;
+            }
+        }
+        let saved_worker = app.world().get::<Worker>(worker).unwrap().clone();
+        assert!(saw_walking && saved_worker.carrying.is_some());
+        let saved_world = app.world().resource::<Settlement>().clone();
+        let saved_clock = app.world().resource::<SimulationClock>().0;
+        app.world_mut()
+            .resource_mut::<crate::session::Session>()
+            .paused = true;
+        app.update();
+        let pose: Vec<_> = app
+            .world_mut()
+            .query::<(Entity, &crate::art::Limb, &Transform, &ChildOf)>()
+            .iter(app.world())
+            .filter(|(_, _, _, parent)| {
+                app.world()
+                    .get::<WorkerVisual>(parent.parent())
+                    .is_some_and(|visual| visual.0 == 1)
+            })
+            .map(|(id, _, t, _)| (id, *t))
+            .collect();
+        assert_eq!(pose.len(), 4);
+        for _ in 0..20 {
+            app.world_mut().resource_mut::<CameraRig>().toggle();
+            app.update();
+        }
+        for (id, t) in &pose {
+            assert_eq!(*app.world().get::<Transform>(*id).unwrap(), *t);
+        }
+        app.world_mut()
+            .resource_mut::<crate::session::Session>()
+            .paused = false;
+        for _ in 0..120 {
+            app.update();
+        }
+        app.world_mut()
+            .resource_mut::<crate::session::Session>()
+            .paused = true;
+        let encoded = serde_json::to_vec(&saved_worker).unwrap();
+        app.world_mut()
+            .entity_mut(worker)
+            .insert(serde_json::from_slice::<Worker>(&encoded).unwrap());
+        app.world_mut().insert_resource(saved_world);
+        app.world_mut().resource_mut::<SimulationClock>().0 = saved_clock;
+        app.update();
+        for (id, t) in &pose {
+            assert_eq!(*app.world().get::<Transform>(*id).unwrap(), *t);
+        }
+        let body = app
+            .world_mut()
+            .query::<(&WorkerVisual, &Transform)>()
+            .iter(app.world())
+            .find(|(v, _)| v.0 == 1)
+            .unwrap()
+            .1;
+        assert_eq!(body.rotation, Quat::from_rotation_y(saved_worker.facing));
     }
     #[test]
     fn two_residents_work_in_parallel_with_real_sources_correct_cargo_and_persistent_views() {

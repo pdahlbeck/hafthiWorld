@@ -237,13 +237,18 @@ pub fn foliage() -> Mesh {
     shape.compute_smooth_normals();
     shape
 }
+#[derive(Component, Clone, Copy)]
+pub struct Limb {
+    pub side: f32,
+    pub arm: bool,
+}
 pub fn human_parts(
     parent: &mut ChildSpawnerCommands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
     cloth: Handle<StandardMaterial>,
     skin: Handle<StandardMaterial>,
-) {
+) -> Entity {
     let leather = materials.add(StandardMaterial {
         base_color: Color::srgb(0.19, 0.12, 0.075),
         perceptual_roughness: 0.95,
@@ -304,30 +309,58 @@ pub fn human_parts(
         MeshMaterial3d(skin.clone()),
         Transform::from_xyz(0., 0.48, 0.),
     ));
+    let shoe = meshes.add(softened_box(Vec3::new(0.15, 0.12, 0.27), 0.045));
+    let mut right_arm = None;
     for sign in [-1., 1.] {
-        parent.spawn((
-            Mesh3d(sphere.clone()),
-            MeshMaterial3d(skin.clone()),
-            Transform::from_xyz(sign * 0.315, -0.07, 0.03)
-                .with_scale(Vec3::new(0.060, 0.080, 0.065)),
-        ));
-        parent.spawn((
-            Mesh3d(limb.clone()),
-            MeshMaterial3d(cloth.clone()),
-            Transform::from_xyz(sign * 0.285, 0.16, 0.02)
-                .with_rotation(Quat::from_rotation_z(sign * 0.13)),
-        ));
-        parent.spawn((
-            Mesh3d(limb.clone()),
-            MeshMaterial3d(leather.clone()),
-            Transform::from_xyz(sign * 0.12, -0.43, 0.),
-        ));
-        parent.spawn((
-            Mesh3d(meshes.add(softened_box(Vec3::new(0.15, 0.12, 0.27), 0.045))),
-            MeshMaterial3d(leather.clone()),
-            Transform::from_xyz(sign * 0.12, -0.64, 0.055),
-        ));
+        let arm = parent
+            .spawn((
+                Limb {
+                    side: sign,
+                    arm: true,
+                },
+                Transform::from_xyz(sign * 0.285, 0.34, 0.02)
+                    .with_rotation(Quat::from_rotation_z(sign * 0.13)),
+                Visibility::Inherited,
+            ))
+            .with_children(|arm| {
+                arm.spawn((
+                    Mesh3d(limb.clone()),
+                    MeshMaterial3d(cloth.clone()),
+                    Transform::from_xyz(0., -0.18, 0.),
+                ));
+                arm.spawn((
+                    Mesh3d(sphere.clone()),
+                    MeshMaterial3d(skin.clone()),
+                    Transform::from_xyz(0., -0.41, 0.01).with_scale(Vec3::new(0.060, 0.080, 0.065)),
+                ));
+            })
+            .id();
+        if sign > 0. {
+            right_arm = Some(arm);
+        }
+        parent
+            .spawn((
+                Limb {
+                    side: sign,
+                    arm: false,
+                },
+                Transform::from_xyz(sign * 0.12, -0.23, 0.),
+                Visibility::Inherited,
+            ))
+            .with_children(|leg| {
+                leg.spawn((
+                    Mesh3d(limb.clone()),
+                    MeshMaterial3d(leather.clone()),
+                    Transform::from_xyz(0., -0.20, 0.),
+                ));
+                leg.spawn((
+                    Mesh3d(shoe.clone()),
+                    MeshMaterial3d(leather.clone()),
+                    Transform::from_xyz(0., -0.41, 0.055),
+                ));
+            });
     }
+    right_arm.expect("both arms are authored")
 }
 
 #[cfg(test)]

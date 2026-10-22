@@ -253,6 +253,8 @@ pub struct Worker {
     pub role: WorkerRole,
     #[serde(with = "crate::session::vector")]
     pub position: Vec2,
+    #[serde(default)]
+    pub facing: f32,
     pub home_id: u32,
     pub task: Task,
     pub carrying: Option<usize>,
@@ -272,6 +274,7 @@ impl Default for Worker {
             id: 1,
             role: WorkerRole::General,
             position: STOCKPILE,
+            facing: 0.0,
             home_id: HOME_ID,
             task: Task::Idle,
             carrying: None,
@@ -314,6 +317,7 @@ impl Worker {
         };
         self.target < limit
             && self.position.is_finite()
+            && self.facing.is_finite()
             && self.handling.is_finite()
             && self.handling >= 0.0
             && self.home_id == HOME_ID
@@ -535,7 +539,15 @@ impl Worker {
             seconds -= step;
         }
     }
-    fn advance_work(&mut self, mut seconds: f32, settlement: &mut Settlement) {
+    fn advance_work(&mut self, seconds: f32, settlement: &mut Settlement) {
+        let previous = self.position;
+        self.advance_work_inner(seconds, settlement);
+        let direction = self.position - previous;
+        if direction.length_squared() > 0.00000001 {
+            self.facing = direction.x.atan2(direction.y);
+        }
+    }
+    fn advance_work_inner(&mut self, mut seconds: f32, settlement: &mut Settlement) {
         if !seconds.is_finite() || seconds <= 0.0 {
             return;
         }
