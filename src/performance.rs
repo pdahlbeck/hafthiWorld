@@ -193,7 +193,7 @@ fn setup(mut commands: Commands, options: Res<RunOptions>, mut day: ResMut<Dayli
         Node {
             position_type: PositionType::Absolute,
             right: px(12),
-            top: px(280),
+            top: px(300),
             padding: UiRect::all(px(8)),
             ..default()
         },

@@ -103,6 +103,10 @@ mod tests {
         let c = &app.world().resource::<Settlement>().calendar;
         assert!(seconds >= YEAR_SECONDS);
         assert_eq!(c.year, 2);
+        assert_eq!(
+            app.world().resource::<Settlement>().household.hearth.missed,
+            3
+        );
         assert_eq!(c.season(), Season::Spring);
         assert!((c.remaining() - (SEASON_SECONDS - seconds % YEAR_SECONDS)).abs() < 0.001);
         app.world_mut().spawn(Worker::default());

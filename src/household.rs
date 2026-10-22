@@ -14,6 +14,7 @@ pub struct Household {
     pub food_used: u64,
     pub missed_rations: u64,
     pub hungry: bool,
+    pub hearth: crate::hearth::Hearth,
     elapsed: f64,
 }
 impl Default for Household {
@@ -25,6 +26,7 @@ impl Default for Household {
             food_used: 0,
             missed_rations: 0,
             hungry: false,
+            hearth: crate::hearth::Hearth::default(),
             elapsed: 0.0,
         }
     }

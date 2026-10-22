@@ -43,6 +43,8 @@ pub enum LogLocation {
     Carried,
     Stored,
     Installed,
+    Home(u32),
+    Burned(u32),
 }
 #[derive(Debug, Default)]
 pub struct Construction {
@@ -78,6 +80,11 @@ impl Settlement {
     fn advance_environment(&mut self, seconds: f64) {
         let growth_seconds = self.calendar.advance(seconds);
         self.farm.grow(growth_seconds);
+        self.household.hearth.advance(
+            (seconds - growth_seconds).max(0.0),
+            self.household.id,
+            &mut self.logs,
+        );
         self.flock.graze(seconds);
         self.household.advance(seconds, &mut self.farm.grain);
     }
@@ -153,6 +160,10 @@ pub enum Task {
     ToHome,
     UnloadingFood,
     FromHome,
+    ToFuelStore,
+    LoadingFuel,
+    ToFuelHome,
+    UnloadingFuel,
     ToTradeStore,
     LoadingTradeWool,
     ToTrader,
@@ -242,6 +253,18 @@ impl Worker {
         self.handling = 0.0;
     }
     fn choose_task(&mut self, settlement: &Settlement) -> bool {
+        if settlement.household.hearth.ordered
+            && self.home_id == settlement.household.id
+            && settlement.count(LogLocation::Home(self.home_id)) < crate::hearth::FUEL_TARGET
+            && let Some(log) = settlement
+                .logs
+                .iter()
+                .position(|&l| l == LogLocation::Stored)
+        {
+            self.target = log;
+            self.start(Task::ToFuelStore);
+            return true;
+        }
         if let Some(grain) = settlement.farm.seed_candidate() {
             self.target = grain;
             self.start(Task::ToSeedStore);
@@ -385,6 +408,8 @@ impl Worker {
                 | Task::ToTradeStore
                 | Task::ToTrader
                 | Task::FromTrader
+                | Task::ToFuelStore
+                | Task::ToFuelHome
                 | Task::ToSeedStore
                 | Task::ToFoodStore
                 | Task::ToHome
@@ -393,7 +418,8 @@ impl Worker {
                         Task::ToTradeStore | Task::FromTrader => STOCKPILE,
                         Task::ToTrader => TRADE_WORK,
                         Task::ToSeedStore | Task::ToFoodStore | Task::FromHome => STOCKPILE,
-                        Task::ToHome => HOME_DELIVERY,
+                        Task::ToFuelStore => STOCKPILE,
+                        Task::ToHome | Task::ToFuelHome => HOME_DELIVERY,
                         Task::ToPastureGateway | Task::DeliveringWool => STOCKPILE,
                         Task::ToPastureEdge | Task::FromPastureEdge => FIELD_WORK,
                         Task::ToPasture | Task::FromPasture => PASTURE_GATE,
@@ -427,6 +453,8 @@ impl Worker {
                         Task::ToTrader => Task::HandingTradeWool,
                         Task::FromTrader if self.carrying_salt.is_some() => Task::StoringSalt,
                         Task::FromTrader => Task::Idle,
+                        Task::ToFuelStore => Task::LoadingFuel,
+                        Task::ToFuelHome => Task::UnloadingFuel,
                         Task::ToSeedStore => Task::PreparingSeeds,
                         Task::ToFoodStore => Task::LoadingFood,
                         Task::ToHome => Task::UnloadingFood,
@@ -472,6 +500,23 @@ impl Worker {
                         break;
                     }
                     match self.task {
+                        Task::LoadingFuel => {
+                            if settlement.logs[self.target] != LogLocation::Stored
+                                || settlement.count(LogLocation::Home(self.home_id))
+                                    >= crate::hearth::FUEL_TARGET
+                            {
+                                self.start(Task::Idle);
+                                continue;
+                            }
+                            settlement.logs[self.target] = LogLocation::Carried;
+                            self.carrying = Some(self.target);
+                            self.start(Task::ToFuelHome);
+                        }
+                        Task::UnloadingFuel => {
+                            let log = self.carrying.take().expect("fuel delivery requires a log");
+                            settlement.logs[log] = LogLocation::Home(self.home_id);
+                            self.start(Task::FromHome);
+                        }
                         Task::LoadingTradeWool => {
                             if settlement.barter.wool_candidate(&settlement.flock.wool)
                                 != Some(self.target)
