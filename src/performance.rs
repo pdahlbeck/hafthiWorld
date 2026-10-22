@@ -20,8 +20,8 @@ pub enum VisualQuality {
 impl VisualQuality {
     pub fn grass_patches(self) -> u32 {
         match self {
-            Self::Low => 60,
-            Self::High => 180,
+            Self::Low => 160,
+            Self::High => 450,
         }
     }
     pub fn shadows(self) -> bool {

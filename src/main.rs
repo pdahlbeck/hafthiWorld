@@ -1,7 +1,9 @@
 //! One world and simulation, observed through two camera modes.
 mod art;
+mod art_assets;
 mod calendar;
 mod camera;
+mod coast;
 mod farming;
 mod fishing;
 mod hearth;
@@ -12,6 +14,7 @@ mod motion;
 mod orders;
 mod performance;
 mod presentation;
+mod resident;
 mod session;
 mod shipping;
 mod simulation;
@@ -71,5 +74,6 @@ fn main() -> AppExit {
             shipping::ShippingPlugin,
             inspection::InspectionPlugin,
         ))
+        .add_plugins(resident::ResidentPlugin)
         .run()
 }

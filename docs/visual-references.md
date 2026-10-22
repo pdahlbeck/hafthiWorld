@@ -65,3 +65,14 @@ Two small visiting sailor models, steering oar and a curved plain square cloth m
 ## Sculpted timber, hull, people and foliage pass
 
 The revised horizontal round-timber wall courses, bowed straw-colored roof, ridge/eave fringe, continuous small hull and swept stems are original artistic constructions. They do not establish a particular log-building technique, roof plant species, harbour/vessel type or documented Gotlandic plan circa 900 CE. The simple faces, hair, belts, clothing proportions and boots are illustrative rather than reconstructed regional dress. Clustered irregular crowns and boughs are stylistic vegetation, not a botanical survey. The earlier SGU/museum references continue to support only the broad regional material/context vocabulary; no additional archaeological certainty is claimed by increasing model detail. All new shapes, vertex colors and variations are authored in Rust without copied meshes, museum plans, photographs, generated-image assets or external textures.
+
+## Coastal art study (2026-10-22)
+
+The new layered stone silhouettes, worn path palette and weighted resident are
+original artistic studies. They add no new historical claim or archaeological
+identification. The 15-joint adult model, hairstyle, garment profile, cuffs, belt
+and pouch are fictional interpretations pending a more specific costume study.
+Source mesh, surface-generation scripts, runtime export and limits are documented
+in `assets/README.md`. The head adapts MakeHuman’s CC0 anatomical base, with the
+source revision and complete asset license in `tools/art/reference/`. No
+proprietary game assets or photo scans were used.

@@ -40,9 +40,9 @@ impl Plugin for PresentationPlugin {
     }
 }
 #[derive(Component)]
-struct WorkerVisual(u32);
+pub(crate) struct WorkerVisual(pub(crate) u32);
 #[derive(Component)]
-struct AxeVisual;
+pub(crate) struct AxeVisual;
 #[derive(Component)]
 struct LogVisual(usize);
 #[derive(Component)]
@@ -111,11 +111,12 @@ fn setup(
             });
         });
     let leaf = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.20, 0.37, 0.16),
+        base_color: Color::srgb(0.25, 0.36, 0.25),
+        cull_mode: None,
         perceptual_roughness: 1.0,
         ..default()
     });
-    let trunk = meshes.add(Cylinder::new(0.12, 1.8));
+    let trunk = meshes.add(Cone::new(0.14, 3.3));
     let crown = meshes.add(crate::art::foliage());
     let stump = meshes.add(Cylinder::new(0.14, 0.30));
     for (i, p) in TREE_POSITIONS.iter().enumerate() {
@@ -123,28 +124,27 @@ fn setup(
             .spawn((
                 Mesh3d(trunk.clone()),
                 MeshMaterial3d(wood.clone()),
-                Transform::from_xyz(p.x, 1.1, p.y),
+                Transform::from_xyz(p.x, 1.85, p.y),
                 TreeVisual(i),
             ))
             .with_children(|parent| {
-                for (j, offset) in [
-                    Vec3::new(0., 1.15, 0.),
-                    Vec3::new(-0.30, 1.02, 0.15),
-                    Vec3::new(0.30, 1.1, -0.15),
-                    Vec3::new(0.04, 1.45, 0.06),
-                ]
-                .into_iter()
-                .enumerate()
-                {
-                    parent.spawn((
-                        Mesh3d(crown.clone()),
-                        MeshMaterial3d(leaf.clone()),
-                        Transform::from_translation(offset).with_scale(Vec3::new(
-                            if j == 0 { 0.72 } else { 0.50 },
-                            if j == 3 { 0.55 } else { 0.68 },
-                            0.60,
-                        )),
-                    ));
+                for layer in 0..6 {
+                    let h = -0.35 + layer as f32 * 0.37;
+                    let width = 1.0 - layer as f32 * 0.13;
+                    for bough in 0..3 {
+                        let angle = bough as f32 * 2.0944 + layer as f32 * 0.65;
+                        parent.spawn((
+                            Mesh3d(crown.clone()),
+                            MeshMaterial3d(leaf.clone()),
+                            Transform::from_xyz(
+                                angle.cos() * width * 0.2,
+                                h,
+                                angle.sin() * width * 0.2,
+                            )
+                            .with_rotation(Quat::from_rotation_y(angle))
+                            .with_scale(Vec3::new(width, 0.9, width)),
+                        ));
+                    }
                 }
             });
         commands.spawn((

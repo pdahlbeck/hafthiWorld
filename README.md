@@ -62,7 +62,9 @@ The timber chain has one founder by default, three fixed trees, one timber mater
 ## Architecture
 
 - `art.rs`: shared rounded timber edges, shaped clothing/anatomy, continuous boat shell/deck/rails, bowed thatch and irregular matte foliage. These are rendering meshes, not simulation/collision geometry.
-- `world.rs`: deterministic irregular shore, shallow sea bands and wave lines, shared grass patches with wind, pine group, timber farm silhouette, sunlight/sky/fog and shared shore/obstacle queries.
+- `world.rs`: grass/pines/farmstead, daylight/sky/fog and shared shore/obstacle queries.
+- `coast.rs`: continuous shore/meadow/shelf meshes, layered limestone and tiled PBR surfaces.
+- `resident.rs` / `art_assets.rs`: first skinned resident study, saved-clock bone poses and embedded runtime art.
 - `performance.rs`: low/high render settings, rolling CPU wall-frame statistics and a timed CSV benchmark. It never changes settlement resources or work.
 - `camera.rs`: explicit camera-mode resource, independent strategy/first-person poses, collision-aware movement, focus and cursor policy. It never mutates simulation.
 - `calendar.rs`: an accelerated four-season world calendar, sowing windows and exact nonwinter crop-growth time across long updates/year boundaries. It has no camera or presentation-clock dependency.
@@ -81,7 +83,7 @@ The timber chain has one founder by default, three fixed trees, one timber mater
 - `session.rs`: versioned full simulation snapshots, checked cargo/roster, atomic local save replacement, restore and simulation pause. Camera poses stay live.
 - `main.rs`: plugin composition and window setup.
 
-`FixedUpdate` advances material flow regardless of camera mode. `Update` presents the current state. All geometry is original and procedural; historical layouts, costumes and logistics timing are artistic/technical interpretations, not archaeological claims. Several small interactive props remain simplified prototypes.
+`FixedUpdate` advances material flow regardless of camera mode. `Update` presents the current state. Environment geometry and clothing are authored for this project; the founder’s head adapts a documented CC0 anatomical base (see `assets/README.md`). Historical layouts, costumes and logistics timing are artistic/technical interpretations, not archaeological claims. Several small interactive props remain simplified prototypes.
 
 ## Validation
 
@@ -443,3 +445,15 @@ The founder and invited coastal helper now swing opposite legs and arms while wa
 These are simple procedural limb swings and bounded arm reaches, without elbow/knee joints, terrain foot placement or full inverse kinematics. Work gestures and gait timing are artistic interpretations. No new assets or dependencies are required. Three additional tests cover opposite leg swings, cargo-directed arms, old saves, and exact resident pose/heading restoration across pause and camera changes.
 
 To test: order a tree with **1**, **F**, follow the worker through walking, felling and log delivery, then try **C**, **J** or **P/L** for other work/cargo poses. Invite the helper with **N** to watch simultaneous work. Pause mid-delivery, press **F5**, resume, then **F9**: the same job, cargo, body direction and limb pose should return paused. Check both views with **Tab**.
+
+## Coastal art study: textured surfaces and one skinned resident
+
+This review slice establishes an editable asset workflow beyond the earlier primitive-based models. The founder now uses a Blender-authored glTF skin with project-authored clothing/rig and a CC0 MakeHuman anatomical head: a 15-joint skeleton with weighted clothing, elbow/knee/ankle articulation, an adult silhouette, facial landmarks, cuffs/neckline/seams, boots, belt and pouch. `resident.rs` replaces the founder's old render parts only when the complete embedded model is ready, reattaches the existing axe to the hand, and poses the rig from the same saved worker/task/cargo/heading/clock. The founder's simulation entity, job and material inventory persist. Helper, trader and sailors retain their previous art for this first model study.
+
+`coast.rs` replaces the stacked flat shore discs and uniform boulder necklace with a continuous tessellated meadow/gravel/submerged shelf, broken angular limestone beds and clustered stones. The playable centre stays level; this is not a new height-aware navigation system. Soil, limestone and timber use original tileable base-color, normal and roughness maps. Vertex colors add broad meadow variation and visual path wear. Grass uses curved tapered blades with local color variation; pine sprays leave gaps between needles, with tapered trunks and visible bough supports. High/Low retain their shadow difference and use up to 450/160 grass patches before placement exclusions. Texture detail and the new character currently share one resolution/LOD across tiers.
+
+All runtime art is embedded in the binary, so launching the built executable does not require copying a separate assets folder. No new Rust dependency is needed. Editable `.blend`, deterministic texture generation, export scripts and an independent validator for glTF geometry, normals, joint indices and weights live under `tools/art/`; see [asset provenance and regeneration](assets/README.md).
+
+**This remains a quality study, not finished production graphics.** The environment is still a compact diorama with a level playable centre. Roof/water/props and the remaining people need further art work. The new skin has procedural bone poses rather than polished animation clips, facial animation, finger articulation, full cargo IK or foot planting. The costume and appearance are artistic interpretations. Evaluate the captures and desktop build before extending this model to everyone.
+
+Test the default High setting and `--quality low`: inspect the shore and founder at walking distance with Tab, order **1/F** and follow felling/log delivery, pause with Space, save with F5, resume and load with F9. Check heading, knees/arms, cargo and the axe after load and camera changes. Existing material flow/inspection/save controls remain the same. Graphical Linux software-Vulkan checks establish rendering functionality, not Apple Metal performance.
