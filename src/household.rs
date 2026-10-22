@@ -12,6 +12,7 @@ pub struct Household {
     pub supply_ordered: bool,
     pub started: bool,
     pub food_used: u64,
+    pub fish_used: u64,
     pub missed_rations: u64,
     pub hungry: bool,
     pub hearth: crate::hearth::Hearth,
@@ -24,6 +25,7 @@ impl Default for Household {
             supply_ordered: false,
             started: false,
             food_used: 0,
+            fish_used: 0,
             missed_rations: 0,
             hungry: false,
             hearth: crate::hearth::Hearth::default(),
@@ -39,12 +41,23 @@ impl Household {
         self.supply_ordered = true;
         true
     }
+    #[cfg(test)]
     pub fn advance(&mut self, seconds: f64, grain: &mut [GrainLocation]) {
+        self.advance_food(seconds, grain, &mut []);
+    }
+    pub fn advance_food(
+        &mut self,
+        seconds: f64,
+        grain: &mut [GrainLocation],
+        fish: &mut [crate::fishing::FishLocation],
+    ) {
         if !seconds.is_finite() || seconds <= 0.0 {
             return;
         }
         if !self.started {
-            if !grain.contains(&GrainLocation::Home(self.id)) {
+            if !grain.contains(&GrainLocation::Home(self.id))
+                && !fish.contains(&crate::fishing::FishLocation::Home(self.id))
+            {
                 return;
             }
             self.started = true;
@@ -60,6 +73,13 @@ impl Household {
             if used < due && *unit == GrainLocation::Home(self.id) {
                 *unit = GrainLocation::Consumed(self.id);
                 used += 1;
+            }
+        }
+        for unit in fish {
+            if used < due && *unit == crate::fishing::FishLocation::Home(self.id) {
+                *unit = crate::fishing::FishLocation::Eaten(self.id);
+                used += 1;
+                self.fish_used = self.fish_used.saturating_add(1);
             }
         }
         self.food_used = self.food_used.saturating_add(used);

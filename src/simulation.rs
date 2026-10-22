@@ -1,6 +1,9 @@
 //! Fixed-step logistics, independent of cameras, input and rendering.
+#[path = "coastal_work.rs"]
+mod coastal_work;
 use crate::calendar::Calendar;
 use crate::farming::{CropPhase, FIELD_WORK, Farm, GrainLocation, SeedLocation, grain_position};
+use crate::fishing::{CoastalTask, FishLocation, Fishery};
 use crate::household::{HOME_DELIVERY, HOME_ID, Household};
 use crate::livestock::{Flock, PASTURE_GATE, WOOL_PER_SHEEP, WoolLocation};
 use crate::trade::{Barter, SaltLocation, TRADE_WORK};
@@ -61,6 +64,7 @@ pub struct Settlement {
     pub household: Household,
     pub barter: Barter,
     pub calendar: Calendar,
+    pub fishery: Fishery,
 }
 impl Default for Settlement {
     fn default() -> Self {
@@ -73,6 +77,7 @@ impl Default for Settlement {
             household: Household::default(),
             barter: Barter::default(),
             calendar: Calendar::default(),
+            fishery: Fishery::default(),
         }
     }
 }
@@ -86,7 +91,8 @@ impl Settlement {
             &mut self.logs,
         );
         self.flock.graze(seconds);
-        self.household.advance(seconds, &mut self.farm.grain);
+        self.household
+            .advance_food(seconds, &mut self.farm.grain, &mut self.fishery.fish);
     }
     pub fn count(&self, location: LogLocation) -> usize {
         self.logs.iter().filter(|&&v| v == location).count()
@@ -123,6 +129,7 @@ pub fn ground_log_position(log: usize) -> Vec2 {
 pub struct SimulationClock(pub f64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Task {
+    Coastal(CoastalTask),
     Idle,
     ToTree,
     Felling,
@@ -217,6 +224,7 @@ pub struct Worker {
     pub carrying_grain: Option<usize>,
     pub carrying_wool: Option<usize>,
     pub carrying_salt: Option<usize>,
+    pub carrying_fish: Option<usize>,
     sheep_hauling: bool,
     farm_job: FarmJob,
     target: usize,
@@ -233,6 +241,7 @@ impl Default for Worker {
             carrying_grain: None,
             carrying_wool: None,
             carrying_salt: None,
+            carrying_fish: None,
             sheep_hauling: false,
             farm_job: FarmJob::Sow,
             target: 0,
@@ -280,6 +289,19 @@ impl Worker {
         {
             self.target = grain;
             self.start(Task::ToFoodStore);
+            return true;
+        }
+        if settlement.household.supply_ordered
+            && self.home_id == settlement.household.id
+            && let Some(fish) = settlement.fishery.first(FishLocation::PreservedStored)
+        {
+            self.target = fish;
+            self.start(Task::Coastal(CoastalTask::ToMealStore));
+            return true;
+        }
+        if let Some(salt) = settlement.fishery.salting_salt(&settlement.barter.salt) {
+            self.target = salt;
+            self.start(Task::Coastal(CoastalTask::ToBrineStore));
             return true;
         }
         if let Some(wool) = settlement.barter.wool_candidate(&settlement.flock.wool) {
@@ -353,6 +375,13 @@ impl Worker {
             self.target = sheep;
             self.sheep_hauling = false;
         } else {
+            if settlement.fishery.fishing_ordered
+                && let Some(fish) = settlement.fishery.first(FishLocation::Uncaught)
+            {
+                self.target = fish;
+                self.start(Task::Coastal(CoastalTask::ToFishingSpot));
+                return true;
+            }
             return false;
         }
         self.start(Task::ToPastureGateway);
@@ -384,6 +413,7 @@ impl Worker {
         }
         while seconds > 0.0 {
             match self.task {
+                Task::Coastal(task) => self.advance_coastal(&mut seconds, settlement, task),
                 Task::Idle => {
                     if !self.choose_task(settlement) {
                         break;
