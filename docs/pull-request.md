@@ -1,22 +1,22 @@
-## Save a session and resume ongoing work
+## Collect the shore visitor's paid wool by boat
 
-Longer settlement sessions can now be kept between launches. Space pauses settlement simulation while camera navigation and queued orders remain available; F5 saves one local slot and F9 restores it paused. A status panel shows pause state and save/load outcomes in either camera mode.
+The completed wool/salt trade previously left all four paid bundles at the visitor indefinitely. U / Boat now requests one outbound collection: wait for the real trade and returned salt, approach the southwestern landing, carry the visitor's existing wool aboard one bundle at a time, and depart only with all four aboard. No extra materials or payment are created.
 
-The versioned snapshot retains the complete settlement, both residents' job progress and actual carried items, exclusive coastal ownership, resource locations, orders, calendar, household/fuel timers and sunlight. Restore reuses resident entities by domain ID and reconciles the optional helper/body/children. Camera poses, selected tree and render quality stay current. Session keys require window focus and work with released first-person mouse capture.
+The boat uses a fixed simulation route and two 20-second sailing legs. The coastal resident (founder if solo, helper if invited) uses the common exclusive job ownership and cargo slot, after current work/home supply/salting. The four existing wool meshes follow the actual carrier, then the moving hull; exported cargo hides only after departure. A status panel exposes voyage phase and aboard/exported counts, and the native order bar includes U in both-mode input guards.
 
-The slot is `hafthi-save.json` in the working directory, gitignored. Saving validates cargo and roster and writes and flushes a new sibling temporary file before renaming over the previous slot. Damaged/truncated/unsupported saves report a visible error before changing the running session. The checksum detects accidental damage; manually edited saves and format migrations are unsupported. A stale temporary file reports failure, preserving the previous slot. No autosave or multiple slots.
+Space pauses sailing/loading. F5/F9 restore voyage progress and in-flight cargo exactly. The new settlement field defaults for existing PR #16 version-1 saves; checksum handling and file validation remain intact. The boat, mast/furled cloth, handover plank and mooring posts are original procedural scenery. This is not a reconstructed Gotlandic vessel/harbour or a costed harbour-building system. There is no shipbuilding, crew/sail physics, passenger travel, repeated trade, incoming cargo or second sale of the same wool. Historical interpretation limits and controls are documented.
 
 ## Validation
 
-- `cargo fmt --check`, `cargo check --locked`, `cargo clippy --locked -- -D warnings`.
-- `cargo test --locked`: **75 passed**. Six new tests compare uninterrupted/restored progression across busy two-resident coastal/material chains; check exact timers/cargo, pause, focus guards, domain/visual roster changes, and file failure/damage/version handling.
-- Debug and release builds; graphical Linux software-Vulkan check of save/pause, solo/helper restoration, both camera modes and restore after restarting. Captures in `docs/screenshots/session-*.png`.
-- Desktop macOS/Metal remains for user testing; software-renderer timing is not a hardware performance result.
+- `cargo fmt --check`, `cargo check --locked`, `cargo clippy --locked -- -D warnings`, debug and release builds pass.
+- `cargo test --locked`: **77 passed**. Two new tests cover finite request/wait/full-load/departure rules and the complete solo/two-resident shearing → barter → fish/home → shipping loop. Checks include walkable routes, actual cargo projections, pause during both sailing legs and persistent mesh entities.
+- Extended existing tests cover native U and focus/cursor guards, exact saved-versus-uninterrupted voyage continuation, and loading legacy saves without a voyage field.
+- Graphical Linux software-Vulkan smoke check: native U request before trade, real two-resident barter and fish chain, pause/save/load during arrival and departure, restored cargo in both cameras, full-load departure and repeated U after completion. Screenshots in `docs/screenshots/shipping-*.png`; this is functional verification, not macOS/Metal performance measurement.
 
-Stacked on #15 (`codex/coastal-helper`). Related to #1; implements a small persistence/usability package, not the remaining roadmap. No new historical claims or external art assets. Adds direct serde/serde_json dependencies already used transitively by Bevy; float round-trip parsing retains simulation timers exactly, with vector serialization scoped to simulation fields.
+Stacked on #16 (`codex/session-save-pause`). Related to #1. No new dependencies.
 
-![Restored carried wool after restart](screenshots/session-cargo-restored.png)
+![One original wool bundle loaded](https://github.com/pdahlbeck/hafthiWorld/blob/codex/coastal-wool-shipment/docs/screenshots/shipping-loading.png)
 
-![Same paused session in first person](screenshots/session-first-person.png)
+![Four bundles departing](https://github.com/pdahlbeck/hafthiWorld/blob/codex/coastal-wool-shipment/docs/screenshots/shipping-departure.png)
 
-![Invalid file leaves current cargo intact](screenshots/session-invalid-save.png)
+![Same restored voyage in first person](https://github.com/pdahlbeck/hafthiWorld/blob/codex/coastal-wool-shipment/docs/screenshots/shipping-first-person.png)

@@ -217,11 +217,12 @@ fn setup(
                 ("C: Shear sheep", OrderButton::Shear),
                 ("H: Supply home", OrderButton::SupplyHome),
                 ("V: Save seed", OrderButton::ReserveSeed),
-                ("J: Barter wool/salt", OrderButton::Barter),
-                ("K: Supply firewood", OrderButton::SupplyFuel),
+                ("J: Wool/salt", OrderButton::Barter),
+                ("K: Firewood", OrderButton::SupplyFuel),
                 ("P: Fish", OrderButton::Fish),
                 ("L: Salt fish", OrderButton::SaltFish),
-                ("N: Invite helper", OrderButton::InviteHelper),
+                ("N: Helper", OrderButton::InviteHelper),
+                ("U: Boat", OrderButton::CollectWool),
             ] {
                 panel
                     .spawn((
@@ -502,9 +503,9 @@ fn hud(
         "not ordered"
     };
     let controls = if rig.mode == CameraMode::Strategy {
-        "WASD orbit | Q/E zoom | Arrows pan | Click tree / 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | V seeds | J barter | K fuel | P fish | L salt | N helper | Tab walk | Esc quit"
+        "WASD orbit | Q/E zoom | Arrows pan | Click tree / 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | V seeds | J barter | K fuel | P fish | L salt | N helper | U boat | Tab walk | Esc quit"
     } else if rig.captured {
-        "WASD walk | Mouse look | 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | V seeds | J barter | K fuel | P fish | L salt | N helper | Tab strategy | Esc release mouse"
+        "WASD walk | Mouse look | 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | V seeds | J barter | K fuel | P fish | L salt | N helper | U boat | Tab strategy | Esc release mouse"
     } else {
         "Click to capture mouse | Tab / Esc strategy (simulation keeps running)"
     };

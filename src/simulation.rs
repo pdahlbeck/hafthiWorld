@@ -72,6 +72,8 @@ pub struct Settlement {
     pub barter: Barter,
     pub calendar: Calendar,
     pub fishery: Fishery,
+    #[serde(default)]
+    pub voyage: crate::shipping::Voyage,
     pub helper_requested: bool,
     pub coastal_assigned: bool,
     pub coastal_owner: Option<u32>,
@@ -88,6 +90,7 @@ impl Default for Settlement {
             barter: Barter::default(),
             calendar: Calendar::default(),
             fishery: Fishery::default(),
+            voyage: crate::shipping::Voyage::default(),
             helper_requested: false,
             coastal_assigned: false,
             coastal_owner: None,
@@ -103,6 +106,8 @@ impl Settlement {
         true
     }
     fn advance_environment(&mut self, seconds: f64) {
+        self.voyage
+            .advance(seconds, &mut self.flock.wool, &self.barter.salt);
         let growth_seconds = self.calendar.advance(seconds);
         self.farm.grow(growth_seconds);
         self.household.hearth.advance(
@@ -288,6 +293,13 @@ impl Worker {
             Task::ToTree | Task::Felling => TREE_POSITIONS.len(),
             Task::ToSheep | Task::Shearing => crate::livestock::SHEEP_COUNT,
             Task::LoadingSalt => crate::trade::SALT_UNITS,
+            Task::Coastal(
+                crate::fishing::CoastalTask::ToExportPile
+                | crate::fishing::CoastalTask::LoadingExportWool
+                | crate::fishing::CoastalTask::ToBoat
+                | crate::fishing::CoastalTask::UnloadingExportWool
+                | crate::fishing::CoastalTask::ReturnFromBoat,
+            ) => crate::livestock::WOOL_UNITS,
             Task::Coastal(crate::fishing::CoastalTask::LoadingBrineSalt) => {
                 crate::trade::SALT_UNITS
             }
@@ -365,6 +377,15 @@ impl Worker {
         }
         false
     }
+    fn choose_shipment(&mut self, s: &mut Settlement) -> bool {
+        if self.can_take_coastal(s)
+            && s.voyage.phase == crate::shipping::VoyagePhase::Loading
+            && let Some(wool) = s.flock.wool.iter().position(|&w| w == WoolLocation::Trader)
+        {
+            return self.coastal_job(s, wool, CoastalTask::ToExportPile);
+        }
+        false
+    }
     fn choose_task(&mut self, settlement: &mut Settlement) -> bool {
         if settlement.coastal_owner == Some(self.id) {
             settlement.coastal_owner = None;
@@ -372,6 +393,7 @@ impl Worker {
         if self.role == WorkerRole::Coastal {
             if self.choose_coastal_supply(settlement)
                 || self.choose_salting(settlement)
+                || self.choose_shipment(settlement)
                 || self.choose_fishing(settlement)
             {
                 return true;
@@ -411,7 +433,10 @@ impl Worker {
             self.start(Task::ToFoodStore);
             return true;
         }
-        if self.choose_coastal_supply(settlement) || self.choose_salting(settlement) {
+        if self.choose_coastal_supply(settlement)
+            || self.choose_salting(settlement)
+            || self.choose_shipment(settlement)
+        {
             return true;
         }
         if let Some(wool) = settlement.barter.wool_candidate(&settlement.flock.wool) {

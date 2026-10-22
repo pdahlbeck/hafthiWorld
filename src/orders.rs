@@ -47,6 +47,7 @@ pub enum OrderButton {
     Fish,
     SaltFish,
     InviteHelper,
+    CollectWool,
 }
 fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
     match order {
@@ -63,6 +64,13 @@ fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
                 }
             } else {
                 "This tree is already ordered or felled."
+            };
+        }
+        OrderButton::CollectWool => {
+            ui.feedback = if settlement.voyage.request() {
+                "Boat requested: waits for both completed salt trades, then collects the visitor's four paid wool bundles."
+            } else {
+                "The one wool collection voyage is already requested or completed."
             };
         }
         OrderButton::InviteHelper => {
@@ -234,6 +242,9 @@ fn issue_orders(
     if input.keys.just_pressed(KeyCode::KeyB) {
         apply(OrderButton::Build, &mut ui, &mut settlement);
     }
+    if input.keys.just_pressed(KeyCode::KeyU) {
+        apply(OrderButton::CollectWool, &mut ui, &mut settlement);
+    }
     if input.keys.just_pressed(KeyCode::KeyN) {
         apply(OrderButton::InviteHelper, &mut ui, &mut settlement);
     }
@@ -287,6 +298,13 @@ mod tests {
                 PrimaryWindow,
             ))
             .id();
+        let collect = app.world_mut().spawn(OrderButton::CollectWool).id();
+        app.world_mut().trigger(Activate { entity: collect });
+        app.update();
+        assert_eq!(
+            app.world().resource::<Settlement>().voyage.phase,
+            crate::shipping::VoyagePhase::WaitingForTrade
+        );
         let invite = app.world_mut().spawn(OrderButton::InviteHelper).id();
         app.world_mut().trigger(Activate { entity: invite });
         app.update();
@@ -441,6 +459,19 @@ mod tests {
             app.update();
             assert_eq!(
                 app.world().resource::<Settlement>().helper_requested,
+                allowed
+            );
+            app.world_mut().resource_mut::<Settlement>().voyage =
+                crate::shipping::Voyage::default();
+            {
+                let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+                keys.reset_all();
+                keys.press(KeyCode::KeyU);
+            }
+            app.update();
+            assert_eq!(
+                app.world().resource::<Settlement>().voyage.phase
+                    == crate::shipping::VoyagePhase::WaitingForTrade,
                 allowed
             );
             app.world_mut().resource_mut::<Settlement>().fishery =

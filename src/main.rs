@@ -10,6 +10,7 @@ mod orders;
 mod performance;
 mod presentation;
 mod session;
+mod shipping;
 mod simulation;
 mod trade;
 mod world;
@@ -64,6 +65,7 @@ fn main() -> AppExit {
             trade::TradePlugin,
             performance::PerformancePlugin,
             session::SessionPlugin,
+            shipping::ShippingPlugin,
         ))
         .run()
 }
