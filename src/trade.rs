@@ -164,9 +164,6 @@ fn sync(
     workers: Query<&Worker>,
     mut salt: Query<(&SaltVisual, &mut Transform, &mut Visibility)>,
 ) {
-    let Ok(worker) = workers.single() else {
-        return;
-    };
     for (visual, mut transform, mut visibility) in &mut salt {
         if settlement.barter.salt[visual.0] == SaltLocation::Consumed {
             *visibility = Visibility::Hidden;
@@ -177,7 +174,14 @@ fn sync(
             SaltLocation::Consumed => unreachable!(),
             SaltLocation::AtSalting => (crate::fishing::SALTING_TABLE + Vec2::new(0.45, 0.0), 1.0),
             SaltLocation::Offered | SaltLocation::Paid => (salt_position(visual.0), 0.4),
-            SaltLocation::Carried => (worker.position + Vec2::new(0.3, 0.0), 1.0),
+            SaltLocation::Carried => {
+                let Some(worker) = workers.iter().find(|w| w.carrying_salt == Some(visual.0))
+                else {
+                    *visibility = Visibility::Hidden;
+                    continue;
+                };
+                (worker.position + Vec2::new(0.3, 0.0), 1.0)
+            }
             SaltLocation::Stored => (STOCKPILE + Vec2::new(visual.0 as f32 * 0.45, 1.25), 0.4),
         };
         transform.translation = Vec3::new(p.x, y, p.y);

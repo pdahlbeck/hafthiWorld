@@ -203,6 +203,7 @@ fn setup(
             Transform::default(),
             Visibility::Hidden,
             LivestockVisual::Wool(i),
+            Name::new(format!("Wool {}", i)),
         ));
     }
     commands.insert_resource(CoatColors { fleece, shorn });
@@ -224,9 +225,7 @@ fn sync(
     mut parts: LivestockParts,
 ) {
     let flock = &settlement.flock;
-    let Ok(worker) = workers.single() else {
-        return;
-    };
+
     for (part, mut transform, mut visible, material) in &mut parts {
         match *part {
             LivestockVisual::Animal(i) => {
@@ -263,7 +262,14 @@ fn sync(
                         continue;
                     }
                     WoolLocation::Ground => (flock.ground[i], 0.4),
-                    WoolLocation::Carried => (worker.position + Vec2::new(0.3, 0.0), 1.0),
+                    WoolLocation::Carried => {
+                        let Some(worker) = workers.iter().find(|w| w.carrying_wool == Some(i))
+                        else {
+                            *visible = Visibility::Hidden;
+                            continue;
+                        };
+                        (worker.position + Vec2::new(0.3, 0.0), 1.0)
+                    }
                     WoolLocation::Trader => (crate::trade::wool_position(i), 0.4),
                     WoolLocation::Stored => {
                         (STOCKPILE + Vec2::new(0.6 + i as f32 * 0.28, -0.6), 0.4)

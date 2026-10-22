@@ -9,6 +9,7 @@ use crate::livestock::{Flock, PASTURE_GATE, WOOL_PER_SHEEP, WoolLocation};
 use crate::trade::{Barter, SaltLocation, TRADE_WORK};
 use bevy::prelude::*;
 
+pub const COASTAL_REST: Vec2 = Vec2::new(-3.2, 3.5);
 pub const STOCKPILE: Vec2 = Vec2::new(-2.5, 3.5);
 pub const BUILD_SITE: Vec2 = Vec2::new(-4.4, 1.5);
 const BUILD_WORK: Vec2 = Vec2::new(-3.3, 1.5);
@@ -31,7 +32,7 @@ impl Plugin for SimulationPlugin {
         app.init_resource::<Settlement>()
             .init_resource::<SimulationClock>()
             .add_systems(Startup, spawn_worker)
-            .add_systems(FixedUpdate, simulate);
+            .add_systems(FixedUpdate, (invite_helper, simulate).chain());
     }
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -65,6 +66,9 @@ pub struct Settlement {
     pub barter: Barter,
     pub calendar: Calendar,
     pub fishery: Fishery,
+    pub helper_requested: bool,
+    pub coastal_assigned: bool,
+    pub coastal_owner: Option<u32>,
 }
 impl Default for Settlement {
     fn default() -> Self {
@@ -78,10 +82,20 @@ impl Default for Settlement {
             barter: Barter::default(),
             calendar: Calendar::default(),
             fishery: Fishery::default(),
+            helper_requested: false,
+            coastal_assigned: false,
+            coastal_owner: None,
         }
     }
 }
 impl Settlement {
+    pub fn request_helper(&mut self) -> bool {
+        if self.helper_requested {
+            return false;
+        }
+        self.helper_requested = true;
+        true
+    }
     fn advance_environment(&mut self, seconds: f64) {
         let growth_seconds = self.calendar.advance(seconds);
         self.farm.grow(growth_seconds);
@@ -130,6 +144,7 @@ pub struct SimulationClock(pub f64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Task {
     Coastal(CoastalTask),
+    ToCrewRest,
     Idle,
     ToTree,
     Felling,
@@ -215,8 +230,16 @@ enum FarmJob {
     Reap,
     Haul,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum WorkerRole {
+    #[default]
+    General,
+    Coastal,
+}
 #[derive(Component, Debug)]
 pub struct Worker {
+    pub id: u32,
+    pub role: WorkerRole,
     pub position: Vec2,
     pub home_id: u32,
     pub task: Task,
@@ -234,6 +257,8 @@ pub struct Worker {
 impl Default for Worker {
     fn default() -> Self {
         Self {
+            id: 1,
+            role: WorkerRole::General,
             position: STOCKPILE,
             home_id: HOME_ID,
             task: Task::Idle,
@@ -261,7 +286,60 @@ impl Worker {
         self.task = task;
         self.handling = 0.0;
     }
-    fn choose_task(&mut self, settlement: &Settlement) -> bool {
+    fn can_take_coastal(&self, s: &Settlement) -> bool {
+        (!s.coastal_assigned || self.role == WorkerRole::Coastal)
+            && (s.coastal_owner.is_none() || s.coastal_owner == Some(self.id))
+    }
+    fn coastal_job(&mut self, s: &mut Settlement, target: usize, task: CoastalTask) -> bool {
+        s.coastal_owner = Some(self.id);
+        self.target = target;
+        self.start(Task::Coastal(task));
+        true
+    }
+    fn choose_coastal_supply(&mut self, s: &mut Settlement) -> bool {
+        if self.can_take_coastal(s)
+            && s.household.supply_ordered
+            && self.home_id == s.household.id
+            && let Some(fish) = s.fishery.first(FishLocation::PreservedStored)
+        {
+            return self.coastal_job(s, fish, CoastalTask::ToMealStore);
+        }
+        false
+    }
+    fn choose_salting(&mut self, s: &mut Settlement) -> bool {
+        if self.can_take_coastal(s)
+            && let Some(salt) = s.fishery.salting_salt(&s.barter.salt)
+        {
+            return self.coastal_job(s, salt, CoastalTask::ToBrineStore);
+        }
+        false
+    }
+    fn choose_fishing(&mut self, s: &mut Settlement) -> bool {
+        if self.can_take_coastal(s)
+            && s.fishery.fishing_ordered
+            && let Some(fish) = s.fishery.first(FishLocation::Uncaught)
+        {
+            return self.coastal_job(s, fish, CoastalTask::ToFishingSpot);
+        }
+        false
+    }
+    fn choose_task(&mut self, settlement: &mut Settlement) -> bool {
+        if settlement.coastal_owner == Some(self.id) {
+            settlement.coastal_owner = None;
+        }
+        if self.role == WorkerRole::Coastal {
+            if self.choose_coastal_supply(settlement)
+                || self.choose_salting(settlement)
+                || self.choose_fishing(settlement)
+            {
+                return true;
+            }
+            if self.position.distance_squared(COASTAL_REST) > 0.0001 {
+                self.start(Task::ToCrewRest);
+                return true;
+            }
+            return false;
+        }
         if settlement.household.hearth.ordered
             && self.home_id == settlement.household.id
             && settlement.count(LogLocation::Home(self.home_id)) < crate::hearth::FUEL_TARGET
@@ -291,17 +369,7 @@ impl Worker {
             self.start(Task::ToFoodStore);
             return true;
         }
-        if settlement.household.supply_ordered
-            && self.home_id == settlement.household.id
-            && let Some(fish) = settlement.fishery.first(FishLocation::PreservedStored)
-        {
-            self.target = fish;
-            self.start(Task::Coastal(CoastalTask::ToMealStore));
-            return true;
-        }
-        if let Some(salt) = settlement.fishery.salting_salt(&settlement.barter.salt) {
-            self.target = salt;
-            self.start(Task::Coastal(CoastalTask::ToBrineStore));
+        if self.choose_coastal_supply(settlement) || self.choose_salting(settlement) {
             return true;
         }
         if let Some(wool) = settlement.barter.wool_candidate(&settlement.flock.wool) {
@@ -357,7 +425,7 @@ impl Worker {
         self.start(Task::ToFarmGateway);
         true
     }
-    fn choose_sheep_task(&mut self, settlement: &Settlement) -> bool {
+    fn choose_sheep_task(&mut self, settlement: &mut Settlement) -> bool {
         if let Some(wool) = settlement
             .flock
             .wool
@@ -375,14 +443,7 @@ impl Worker {
             self.target = sheep;
             self.sheep_hauling = false;
         } else {
-            if settlement.fishery.fishing_ordered
-                && let Some(fish) = settlement.fishery.first(FishLocation::Uncaught)
-            {
-                self.target = fish;
-                self.start(Task::Coastal(CoastalTask::ToFishingSpot));
-                return true;
-            }
-            return false;
+            return self.choose_fishing(settlement);
         }
         self.start(Task::ToPastureGateway);
         true
@@ -419,7 +480,8 @@ impl Worker {
                         break;
                     }
                 }
-                Task::ToTree
+                Task::ToCrewRest
+                | Task::ToTree
                 | Task::ToLog
                 | Task::ToStockpile
                 | Task::ToSite
@@ -445,6 +507,7 @@ impl Worker {
                 | Task::ToHome
                 | Task::FromHome => {
                     let goal = match self.task {
+                        Task::ToCrewRest => COASTAL_REST,
                         Task::ToTradeStore | Task::FromTrader => STOCKPILE,
                         Task::ToTrader => TRADE_WORK,
                         Task::ToSeedStore | Task::ToFoodStore | Task::FromHome => STOCKPILE,
@@ -479,6 +542,7 @@ impl Worker {
                     self.position = goal;
                     seconds -= travel;
                     self.start(match self.task {
+                        Task::ToCrewRest => Task::Idle,
                         Task::ToTradeStore => Task::LoadingTradeWool,
                         Task::ToTrader => Task::HandingTradeWool,
                         Task::FromTrader if self.carrying_salt.is_some() => Task::StoringSalt,
@@ -713,6 +777,17 @@ impl Worker {
 fn spawn_worker(mut commands: Commands, settlement: Res<Settlement>) {
     commands.spawn(Worker::for_home(settlement.household.id));
 }
+fn invite_helper(mut commands: Commands, mut settlement: ResMut<Settlement>) {
+    if settlement.helper_requested && !settlement.coastal_assigned {
+        let mut helper = Worker::for_home(settlement.household.id);
+        helper.id = 2;
+        helper.role = WorkerRole::Coastal;
+        helper.position = TRADE_WORK;
+        helper.start(Task::FromHome); // Walk the clear shore-to-store approach before taking work.
+        commands.spawn(helper);
+        settlement.coastal_assigned = true;
+    }
+}
 fn simulate(
     time: Res<Time<Fixed>>,
     mut clock: ResMut<SimulationClock>,
@@ -721,7 +796,9 @@ fn simulate(
 ) {
     clock.0 += time.delta_secs_f64();
     settlement.advance_environment(time.delta_secs_f64());
-    for mut worker in &mut workers {
+    let mut crew: Vec<_> = workers.iter_mut().collect();
+    crew.sort_by_key(|w| w.id);
+    for mut worker in crew {
         worker.advance_work(time.delta_secs(), &mut settlement);
     }
 }
@@ -755,6 +832,174 @@ mod tests {
         );
         assert!(s.installed() <= BUILD_COST);
         assert!(crate::world::walkable(w.position));
+    }
+    fn two_tick(s: &mut Settlement, a: &mut Worker, b: &mut Worker, dt: f32) {
+        s.advance_environment(dt as f64);
+        a.advance_work(dt, s);
+        b.advance_work(dt, s);
+        assert_eq!(
+            s.fishery.count(FishLocation::CarriedRaw)
+                + s.fishery.count(FishLocation::CarriedPreserved),
+            usize::from(a.carrying_fish.is_some()) + usize::from(b.carrying_fish.is_some())
+        );
+        assert_eq!(
+            s.barter.count(SaltLocation::Carried),
+            usize::from(a.carrying_salt.is_some()) + usize::from(b.carrying_salt.is_some())
+        );
+        assert!(!(matches!(a.task, Task::Coastal(_)) && matches!(b.task, Task::Coastal(_))));
+        for w in [&*a, &*b] {
+            assert!(
+                usize::from(w.carrying.is_some())
+                    + usize::from(w.carrying_grain.is_some())
+                    + usize::from(w.carrying_wool.is_some())
+                    + usize::from(w.carrying_salt.is_some())
+                    + usize::from(w.carrying_fish.is_some())
+                    <= 1
+            );
+            assert!(
+                crate::world::walkable(w.position),
+                "blocked {:?} at {:?}",
+                w.task,
+                w.position
+            );
+        }
+    }
+    #[test]
+    fn inviting_a_resident_does_not_double_world_household_or_winter_clocks() {
+        use bevy::time::TimeUpdateStrategy;
+        fn app(invite: bool) -> App {
+            let mut app = App::new();
+            app.add_plugins(MinimalPlugins)
+                .insert_resource(TimeUpdateStrategy::ManualDuration(
+                    std::time::Duration::from_millis(250),
+                ))
+                .add_plugins(SimulationPlugin);
+            {
+                let mut s = app.world_mut().resource_mut::<Settlement>();
+                s.helper_requested = invite;
+                s.farm.grain.fill(GrainLocation::Home(1));
+                s.logs.fill(LogLocation::Home(1));
+            }
+            app
+        }
+        let mut single = app(false);
+        let mut crew = app(true);
+        for _ in 0..2001 {
+            single.update();
+            crew.update();
+        }
+        assert_eq!(
+            single.world().resource::<SimulationClock>().0,
+            crew.world().resource::<SimulationClock>().0
+        );
+        let a = single.world().resource::<Settlement>();
+        let b = crew.world().resource::<Settlement>();
+        assert_eq!(a.calendar.year, b.calendar.year);
+        assert_eq!(a.calendar.remaining(), b.calendar.remaining());
+        assert_eq!(a.household.food_used, b.household.food_used);
+        assert_eq!(a.household.missed_rations, b.household.missed_rations);
+        assert_eq!(a.household.hearth.burned, b.household.hearth.burned);
+        assert_eq!(b.household.hearth.burned, 3);
+        assert_eq!(a.logs, b.logs);
+        assert_eq!(a.farm.grain, b.farm.grain);
+        assert_eq!(
+            crew.world_mut()
+                .query::<&Worker>()
+                .iter(crew.world())
+                .count(),
+            2
+        );
+        assert!(
+            !crew
+                .world_mut()
+                .resource_mut::<Settlement>()
+                .request_helper()
+        );
+        for _ in 0..10 {
+            crew.update();
+        }
+        assert_eq!(
+            crew.world_mut()
+                .query::<&Worker>()
+                .iter(crew.world())
+                .count(),
+            2
+        );
+    }
+    #[test]
+    fn coastal_handoff_finishes_existing_catch_ingredients_processing_and_meal_transport() {
+        for handoff in [
+            CoastalTask::Fishing,
+            CoastalTask::ToTableWithRaw,
+            CoastalTask::Salting,
+            CoastalTask::ToFishHome,
+        ] {
+            let mut s = Settlement::default();
+            let mut a = Worker::default();
+            s.fishery.request_fishing();
+            s.fishery.request_salting();
+            s.household.request_supply();
+            s.barter.salt.fill(SaltLocation::Stored);
+            for _ in 0..5000 {
+                a.advance(0.1, &mut s);
+                if a.task == Task::Coastal(handoff) {
+                    break;
+                }
+            }
+            assert_eq!(a.task, Task::Coastal(handoff));
+            assert_eq!(s.coastal_owner, Some(1));
+            s.coastal_assigned = true;
+            let mut b = Worker {
+                id: 2,
+                role: WorkerRole::Coastal,
+                ..Worker::default()
+            };
+            let mut helper_worked = false;
+            for _ in 0..6000 {
+                let primary_still_owns = s.coastal_owner == Some(1);
+                two_tick(&mut s, &mut a, &mut b, 0.1);
+                if primary_still_owns && s.coastal_owner == Some(1) {
+                    assert!(!matches!(b.task, Task::Coastal(_)));
+                }
+                helper_worked |= matches!(b.task, Task::Coastal(_));
+                if s.coastal_owner == Some(2) {
+                    assert!(!matches!(a.task, Task::Coastal(_)));
+                }
+            }
+            assert!(helper_worked);
+            assert_eq!(s.household.fish_used, 4);
+            assert_eq!(s.fishery.batches, 2);
+            assert_eq!(s.barter.count(SaltLocation::Consumed), 2);
+            assert_eq!(a.task, Task::Idle);
+            assert_eq!(b.task, Task::Idle);
+            assert_eq!(b.position, COASTAL_REST);
+            assert_eq!(s.coastal_owner, None);
+        }
+    }
+    #[test]
+    fn helper_is_once_only_and_takes_only_coastal_jobs() {
+        let mut s = Settlement::default();
+        assert!(s.request_helper());
+        assert!(!s.request_helper());
+        s.coastal_assigned = true;
+        s.request_harvest(0);
+        s.farm.request_sow();
+        s.flock.request_shear();
+        s.household.hearth.request();
+        let mut a = Worker::default();
+        let mut b = Worker {
+            id: 2,
+            role: WorkerRole::Coastal,
+            ..Worker::default()
+        };
+        for _ in 0..1000 {
+            two_tick(&mut s, &mut a, &mut b, 0.1);
+        }
+        assert_eq!(b.task, Task::Idle);
+        assert_eq!(b.position, COASTAL_REST);
+        assert!(!b.carrying.is_some() && !b.carrying_grain.is_some() && !b.carrying_wool.is_some());
+        assert!(s.trees[0].felled);
+        assert!(s.farm.phase != CropPhase::Fallow);
     }
     #[test]
     fn orders_are_required_and_repeated_orders_do_not_duplicate_material() {

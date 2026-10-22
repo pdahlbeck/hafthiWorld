@@ -241,6 +241,7 @@ fn setup(
             Transform::default(),
             Visibility::Hidden,
             FarmVisual::Grain(i),
+            Name::new(format!("Grain {}", i)),
         ));
     }
     commands.spawn((
@@ -264,9 +265,7 @@ fn sync(
     mut materials: Query<&mut MeshMaterial3d<StandardMaterial>>,
 ) {
     let farm = &settlement.farm;
-    let Ok(worker) = workers.single() else {
-        return;
-    };
+
     for (visual, mut transform, mut visible, children) in &mut visuals {
         match *visual {
             FarmVisual::Crop => {
@@ -301,7 +300,14 @@ fn sync(
                     }
                     GrainLocation::Home(_) => crate::household::pantry_position(i),
                     GrainLocation::Ground => grain_position(i),
-                    GrainLocation::Carried => worker.position + Vec2::new(0.3, 0.0),
+                    GrainLocation::Carried => {
+                        let Some(worker) = workers.iter().find(|w| w.carrying_grain == Some(i))
+                        else {
+                            *visible = Visibility::Hidden;
+                            continue;
+                        };
+                        worker.position + Vec2::new(0.3, 0.0)
+                    }
                     GrainLocation::Stored => STOCKPILE + Vec2::new(-0.6 + i as f32 * 0.35, 0.8),
                 };
                 *visible = Visibility::Visible;
@@ -323,6 +329,10 @@ fn sync(
                     Visibility::Visible
                 };
                 let (p, y) = if farm.seeds == SeedLocation::Carried {
+                    let Some(worker) = workers.iter().find(|w| w.id == 1) else {
+                        *visible = Visibility::Hidden;
+                        continue;
+                    };
                     (worker.position + Vec2::new(0.3, 0.0), 1.0)
                 } else {
                     (STOCKPILE + Vec2::new(-0.7, -0.5), 0.43)
