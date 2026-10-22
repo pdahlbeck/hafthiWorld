@@ -21,20 +21,22 @@ use bevy::{
 pub struct PresentationPlugin;
 impl Plugin for PresentationPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup).add_systems(
-            Update,
-            (
-                spawn_helper_visual,
-                sync_worker,
-                sync_logs,
-                sync_trees,
-                sync_construction,
-                sync_selection,
-                sync_buttons,
-                hud,
-            )
-                .after(OrderInput),
-        );
+        app.init_resource::<crate::inspection::Inspection>()
+            .add_systems(Startup, setup)
+            .add_systems(
+                Update,
+                (
+                    spawn_helper_visual,
+                    sync_worker,
+                    sync_logs,
+                    sync_trees,
+                    sync_construction,
+                    sync_selection,
+                    sync_buttons,
+                    hud,
+                )
+                    .after(OrderInput),
+            );
     }
 }
 #[derive(Component)]
@@ -183,7 +185,7 @@ fn setup(
         Node {
             position_type: PositionType::Absolute,
             left: px(20),
-            right: px(20),
+            right: px(360),
             top: px(20),
             ..default()
         },
@@ -460,15 +462,39 @@ fn sync_buttons(
 }
 fn hud(
     rig: Res<CameraRig>,
+    inspection: Res<crate::inspection::Inspection>,
     s: Res<Settlement>,
     orders: Res<OrderState>,
     clock: Res<SimulationClock>,
     workers: Query<(Entity, &Worker)>,
-    mut texts: Query<&mut Text, With<StatusText>>,
+    mut texts: Query<(&mut Text, &mut TextFont), With<StatusText>>,
 ) {
     let Some((id, w)) = workers.iter().find(|(_, w)| w.id == 1) else {
         return;
     };
+    if !inspection.details {
+        for (mut text, mut font) in &mut texts {
+            font.font_size = px(16).into();
+            text.0 = format!(
+                "hafthiWorld | {} | Year {} {} | {:.1}s\nResidents {} | Food at home {} | Timber stored {} | Tree {}\nTab: views | I: inspect | F2: details | F3: timing\n{}",
+                if rig.mode == CameraMode::Strategy {
+                    "STRATEGY"
+                } else {
+                    "FIRST PERSON"
+                },
+                s.calendar.year,
+                s.calendar.season().label(),
+                clock.0,
+                workers.iter().count(),
+                s.farm.count(GrainLocation::Home(s.household.id))
+                    + s.fishery.count(Fish::Home(s.household.id)),
+                s.stored(),
+                orders.selected + 1,
+                orders.feedback
+            );
+        }
+        return;
+    }
     let crew =
         if let Some((_, helper)) = workers.iter().find(|(_, w)| w.role == WorkerRole::Coastal) {
             format!(
@@ -509,7 +535,8 @@ fn hud(
     } else {
         "Click to capture mouse | Tab / Esc strategy (simulation keeps running)"
     };
-    for mut text in &mut texts {
+    for (mut text, mut font) in &mut texts {
+        font.font_size = px(14).into();
         *text = Text::new(format!(
             "hafthiWorld | {mode} | Simulation {:.1}s | Year {} {} ({:.0}s left) | {}\nWorker {id:?} (home {}): {:?} | Carrying log: {} | Tree {}: {tree_status}\n{crew}\nLogs: in trees {} | ground {} | carried {} | stored {} | installed {}/{}\nTimber rack: {build}\nCrop: {} {:.0}% | seeds stored {} / carried {} / used {}\nGrain: field {} | carried {} | stored {} | harvests {} | seed batches saved {} ({})\nSheep shorn {}/{} | Wool: fleece {} | ground {} | carried {} | stored {} | trader {}\nTrade 2 wool : 1 salt ({}): offered {} | paid {} | carried {} | stored {} | table {} | used {}\nFish: uncaught {} | raw {} | processing {} | preserved {} | carried {} | home {} | eaten {}\nHome {}: {} | pantry grain {} / fish {} | food used {} (fish {}) | missed {} | next use {:.0}s\nWinter fuel: {} | at home {} / {} | burned {} | missed {} | next use {:.0} winter s\n{}\n{controls}",
             clock.0,
