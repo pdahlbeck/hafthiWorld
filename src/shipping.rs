@@ -188,20 +188,27 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    server: Option<Res<AssetServer>>,
 ) {
     let timber = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.35, 0.19, 0.085),
-        perceptual_roughness: 0.95,
-        ..default()
+        base_color: Color::srgb(0.65, 0.65, 0.65),
+        perceptual_roughness: 0.98,
+        ..server
+            .as_deref()
+            .map(|s| crate::coast::material(s, "wood"))
+            .unwrap_or_default()
     });
     let edge = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.58, 0.35, 0.14),
-        perceptual_roughness: 0.95,
-        ..default()
+        base_color: Color::srgb(0.90, 0.90, 0.85),
+        perceptual_roughness: 0.98,
+        ..server
+            .as_deref()
+            .map(|s| crate::coast::material(s, "wood"))
+            .unwrap_or_default()
     });
-    let cloth = materials.add(Color::srgb(0.78, 0.67, 0.46));
+    let cloth = materials.add(Color::srgb(0.69, 0.68, 0.60));
     let sail_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.84, 0.72, 0.49),
+        base_color: Color::srgb(0.76, 0.75, 0.68),
         cull_mode: None,
         perceptual_roughness: 0.95,
         ..default()
@@ -295,6 +302,7 @@ fn setup(
                         blue_tunic.clone()
                     };
                     crew.spawn((
+                        crate::resident::StaticHuman,
                         Mesh3d(meshes.add(crate::art::tunic())),
                         MeshMaterial3d(tunic.clone()),
                         Transform::from_xyz(0., 0.42, 0.).with_scale(Vec3::splat(0.60)),

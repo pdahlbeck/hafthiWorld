@@ -24,4 +24,7 @@ pub fn register(app: &mut App) {
     pack!("materials/wool-normal.png");
     pack!("materials/wool-orm.png");
     pack!("models/coastal-resident.glb");
+    pack!("shaders/coastal_water.wesl");
+    pack!("shaders/coastal_ground.wesl");
+    pack!("materials/meadow-color.png");
 }

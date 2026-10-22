@@ -3,12 +3,14 @@ mod art;
 mod art_assets;
 mod calendar;
 mod camera;
+mod cinematic;
 mod coast;
 mod farming;
 mod fishing;
 mod hearth;
 mod household;
 mod inspection;
+mod landscape;
 mod livestock;
 mod motion;
 mod orders;
@@ -18,7 +20,10 @@ mod resident;
 mod session;
 mod shipping;
 mod simulation;
+mod surfaces;
+mod terrain_material;
 mod trade;
+mod water;
 mod world;
 use bevy::prelude::*;
 
@@ -74,6 +79,12 @@ fn main() -> AppExit {
             shipping::ShippingPlugin,
             inspection::InspectionPlugin,
         ))
-        .add_plugins(resident::ResidentPlugin)
+        .add_plugins((
+            resident::ResidentPlugin,
+            water::WaterPlugin,
+            cinematic::CinematicPlugin,
+            surfaces::SurfacePlugin,
+            terrain_material::GroundPlugin,
+        ))
         .run()
 }

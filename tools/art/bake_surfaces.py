@@ -20,8 +20,8 @@ def noise(scale):
 broad, mid, fine = noise(3), noise(18), noise(100)
 for kind in ('ground','limestone','wool','wood'):
     if kind == 'ground':
-        h = mid*.025 + fine*.004
-        tone = .60 + broad*.025 + mid*.018 + fine*.006
+        h = mid*.006 + fine*.002
+        tone = .60 + mid*.008 + fine*.006
         rgb = np.stack([tone*.96,tone,tone*.91],-1)
         rough = .92 + fine*.025
     elif kind == 'limestone':

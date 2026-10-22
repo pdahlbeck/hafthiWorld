@@ -113,6 +113,8 @@ fn setup(
     let leaf = materials.add(StandardMaterial {
         base_color: Color::srgb(0.25, 0.36, 0.25),
         cull_mode: None,
+        double_sided: true,
+        diffuse_transmission: 0.35,
         perceptual_roughness: 1.0,
         ..default()
     });

@@ -15,6 +15,7 @@ photographs or third-party texture packs are included.
 - Editable source: `tools/art/coastal-resident.blend`. The Blender source uses
   explicit garment profiles, the documented CC0 anatomical head and weighted vertex groups. The accompanying
   scripts regenerate the model and deterministic 512px tileable surface maps.
+  The separate generated meadow albedo stays checked in; see `tools/art/meadow-prompt.md`.
 
 Regenerate from the repository root (authoring tools only; neither is needed to
 build or play):
@@ -34,5 +35,13 @@ facial appearance, hair and palette are fictional artistic choices, not a verifi
 reconstruction of one person or outfit on Gotland circa 900 CE. Elbow/knee motion
 is procedural on a real weighted skeleton; there are no authored motion-capture
 clips, finger animation, facial rig, terrain foot placement or full cargo IK yet.
-Only the founder uses the new character; helper, visitor and sailors remain the
-previous art so the new model can be reviewed before expanding the asset set.
+The same skin is now shared by the founder, helper, trader and two visiting
+sailors. Resident rigs follow their own work; visitors retain a standing pose.
+Distinct costume/face variants and authored animation clips remain to be made.
+
+`shaders/coastal_water.wesl` is the project-authored forward-PBR water extension.
+See `docs/rendering-target.md` for the shader and terrain assumptions.
+
+`materials/meadow-color.png` is an unchanged original ImageGen albedo study,
+blended into the soil by `shaders/coastal_ground.wesl`. Its generation prompt,
+size and limits are recorded in `tools/art/meadow-prompt.md`. It is not a scan.

@@ -76,3 +76,14 @@ Source mesh, surface-generation scripts, runtime export and limits are documente
 in `assets/README.md`. The head adapts MakeHuman’s CC0 anatomical base, with the
 source revision and complete asset license in `tools/art/reference/`. No
 proprietary game assets or photo scans were used.
+
+## User-supplied coastal village rendering target
+
+The subsequent user-supplied image guides naturalistic scene density, coastline,
+light and material relationships. The new timber-frame/infill home, dry stone
+boundaries, woodland and eroded limestone stacks are original artistic placements,
+not evidence for those exact structures/land divisions at this site circa 900 CE.
+No image content or proprietary game assets were extracted. The earlier CC0
+anatomical head remains the documented third-party reference. Rendering limits
+and the distinction between scenic vegetation and finite resources are recorded
+in `docs/rendering-target.md`.

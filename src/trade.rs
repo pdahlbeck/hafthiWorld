@@ -126,6 +126,7 @@ fn setup(
         .with_children(|trader| {
             trader
                 .spawn((
+                    crate::resident::StaticHuman,
                     Mesh3d(meshes.add(crate::art::tunic())),
                     MeshMaterial3d(tunic.clone()),
                     Transform::from_xyz(0., 0.7, 0.),
