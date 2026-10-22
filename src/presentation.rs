@@ -254,7 +254,7 @@ fn setup(
 fn spawn_helper_visual(
     mut commands: Commands,
     workers: Query<&Worker>,
-    visuals: Query<&WorkerVisual>,
+    visuals: Query<(Entity, &WorkerVisual)>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
@@ -262,9 +262,14 @@ fn spawn_helper_visual(
         .iter()
         .find(|w| w.id == 2 && w.role == WorkerRole::Coastal)
     else {
+        for (entity, visual) in &visuals {
+            if visual.0 == 2 {
+                commands.entity(entity).despawn();
+            }
+        }
         return;
     };
-    if visuals.iter().any(|v| v.0 == 2) {
+    if visuals.iter().any(|(_, v)| v.0 == 2) {
         return;
     }
     let tunic = materials.add(Color::srgb(0.20, 0.37, 0.48));

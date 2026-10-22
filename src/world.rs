@@ -15,7 +15,7 @@ impl Plugin for WorldPlugin {
 }
 
 /// A deliberately slow presentation clock, unrelated to work durations.
-#[derive(Resource)]
+#[derive(Resource, serde::Serialize, serde::Deserialize, Clone)]
 pub struct Daylight {
     pub hour: f32,
     pub running: bool,

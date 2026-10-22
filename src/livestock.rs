@@ -6,7 +6,7 @@ pub const SHEEP_COUNT: usize = 2;
 pub const WOOL_PER_SHEEP: usize = 2;
 pub const WOOL_UNITS: usize = SHEEP_COUNT * WOOL_PER_SHEEP;
 pub const PASTURE_GATE: Vec2 = Vec2::new(6.5, -1.8);
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum WoolLocation {
     Fleece,
     Ground,
@@ -14,18 +14,20 @@ pub enum WoolLocation {
     Stored,
     Trader,
 }
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct Sheep {
+    #[serde(with = "crate::session::vector")]
     pub position: Vec2,
     pub yaw: f32,
     pub ordered: bool,
     pub shorn: bool,
     grazing_seconds: f64,
 }
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct Flock {
     pub sheep: [Sheep; SHEEP_COUNT],
     pub wool: [WoolLocation; WOOL_UNITS],
+    #[serde(with = "crate::session::vectors")]
     pub ground: [Vec2; WOOL_UNITS],
 }
 fn home(i: usize) -> Vec2 {

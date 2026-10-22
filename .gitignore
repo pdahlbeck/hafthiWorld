@@ -4,3 +4,6 @@
 *.swo
 .idea/
 .vscode/
+
+/hafthi-save.json
+/hafthi-save.json.tmp

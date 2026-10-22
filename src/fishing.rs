@@ -9,7 +9,7 @@ pub const BATCH_SIZE: usize = 2;
 pub const FISHING_SPOT: Vec2 = Vec2::new(-5.7, 6.0);
 pub const SALTING_TABLE: Vec2 = Vec2::new(-3.9, 4.75);
 pub const SALTING_WORK: Vec2 = Vec2::new(-3.9, 4.1);
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum FishLocation {
     Uncaught,
     FreshAtShore,
@@ -22,7 +22,7 @@ pub enum FishLocation {
     Home(u32),
     Eaten(u32),
 }
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct Fishery {
     pub fishing_ordered: bool,
     pub salting_ordered: bool,
@@ -101,7 +101,7 @@ impl Fishery {
         true
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum CoastalTask {
     ToFishingSpot,
     Fishing,

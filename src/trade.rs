@@ -9,7 +9,7 @@ pub const TRADER_POSITION: Vec2 = Vec2::new(-6.3, 4.4);
 pub const TRADE_WORK: Vec2 = Vec2::new(-5.65, 4.4);
 pub const WOOL_PRICE: usize = 2;
 pub const SALT_UNITS: usize = 2;
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum SaltLocation {
     Offered,
     Paid,
@@ -18,7 +18,7 @@ pub enum SaltLocation {
     AtSalting,
     Consumed,
 }
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct Barter {
     pub ordered: bool,
     pub salt: [SaltLocation; SALT_UNITS],

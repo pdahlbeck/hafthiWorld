@@ -9,6 +9,7 @@ mod livestock;
 mod orders;
 mod performance;
 mod presentation;
+mod session;
 mod simulation;
 mod trade;
 mod world;
@@ -62,6 +63,7 @@ fn main() -> AppExit {
             hearth::HearthPlugin,
             trade::TradePlugin,
             performance::PerformancePlugin,
+            session::SessionPlugin,
         ))
         .run()
 }
