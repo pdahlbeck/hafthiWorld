@@ -36,7 +36,7 @@ struct GrassPatch(f32);
 struct ShoreRipple(f32);
 
 // Small deterministic hash: identical scenery on every platform, no RNG dependency.
-fn noise(index: u32) -> f32 {
+pub(crate) fn noise(index: u32) -> f32 {
     let mut n = index.wrapping_add(0x9e3779b9);
     n = (n ^ (n >> 16)).wrapping_mul(0x85ebca6b);
     n = (n ^ (n >> 13)).wrapping_mul(0xc2b2ae35);
@@ -45,7 +45,7 @@ fn noise(index: u32) -> f32 {
 
 /// Flat playable meadow enclosed by an irregular limestone skirt. The existing
 /// original clearing and authored worker paths stay on the level top at y=.2.
-fn coast_point(i: usize, scale: f32) -> Vec3 {
+pub(crate) fn coast_point(i: usize, scale: f32) -> Vec3 {
     let angle = i as f32 * std::f32::consts::TAU / 64.0;
     let c = angle.cos();
     let s = angle.sin();
@@ -56,45 +56,49 @@ fn coast_point(i: usize, scale: f32) -> Vec3 {
         s.signum() * s.abs().sqrt() * 8.3 * edge * scale,
     )
 }
-fn fan_mesh(scale: f32, height: f32) -> Mesh {
-    let mut points = Vec::with_capacity(64 * 3);
-    for i in 0..64 {
-        let a = coast_point(i, scale);
-        let b = coast_point((i + 1) % 64, scale);
-        points.extend([[0.0, height, 0.0], [b.x, height, b.z], [a.x, height, a.z]]);
-    }
-    Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::default(),
-    )
-    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, points)
-    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[0.0, 1.0, 0.0]; 64 * 3])
-    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, vec![[0.0, 0.0]; 64 * 3])
-}
 fn grass_mesh() -> Mesh {
     let mut points = Vec::new();
-    // One mesh for a patch, shared by all patch entities; crossed tapered blades.
-    for i in 0..28 {
-        let x = (noise(i * 7) - 0.5) * 1.1;
-        let z = (noise(i * 7 + 1) - 0.5) * 1.1;
-        let h = 0.16 + noise(i * 7 + 2) * 0.26;
-        points.extend([
-            [x - 0.025, 0.0, z],
-            [x + 0.025, 0.0, z],
-            [x + 0.07, h, z],
-            [x, 0.0, z - 0.025],
-            [x, 0.0, z + 0.025],
-            [x + 0.07, h, z],
-        ]);
+    let mut normals = Vec::new();
+    let mut colors = Vec::new();
+    let mut uv = Vec::new();
+    for i in 0..56 {
+        let x = (noise(i * 7) - 0.5) * 1.3;
+        let z = (noise(i * 7 + 1) - 0.5) * 1.3;
+        let h = 0.12 + noise(i * 7 + 2) * 0.25;
+        let a = noise(i * 7 + 3) * std::f32::consts::TAU;
+        let side = Vec3::new(a.cos(), 0., a.sin());
+        let lean = Vec3::new(a.sin(), 0., -a.cos()) * (0.05 + noise(i + 600) * 0.12);
+        for k in 0..3 {
+            for (step, sign) in [
+                (0., -1.),
+                (1., -1.),
+                (1., 1.),
+                (0., -1.),
+                (1., 1.),
+                (0., 1.),
+            ] {
+                let t = (k as f32 + step) / 3.;
+                let p = Vec3::new(x, h * t, z) + lean * t * t + side * (sign * 0.014 * (1. - t));
+                points.push(p.to_array());
+                normals.push(
+                    (Vec3::Y * 0.35 + side.cross(Vec3::Y))
+                        .normalize()
+                        .to_array(),
+                );
+                let tint = 0.75 + noise(i + 900) * 0.22;
+                colors.push([tint * (0.68 + t * 0.25), tint, tint * 0.64, 1.]);
+                uv.push([sign * 0.5 + 0.5, t]);
+            }
+        }
     }
-    let count = points.len();
     Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::default(),
     )
     .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, points)
-    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[0.0, 1.0, 0.0]; count])
-    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, vec![[0.0, 0.0]; count])
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colors)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uv)
 }
 fn ripple_mesh(scale: f32) -> Mesh {
     let mut points = Vec::new();
@@ -131,10 +135,25 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     quality: Res<VisualQuality>,
+    server: Res<AssetServer>,
 ) {
+    let ground = crate::coast::spawn(&mut commands, &mut meshes, &mut materials, &server);
+    commands.entity(ground).insert(SeasonalSurface::Meadow);
     spawn_coast(&mut commands, &mut meshes, &mut materials);
-    spawn_farmstead(&mut commands, &mut meshes, &mut materials, *quality);
-    spawn_pines(&mut commands, &mut meshes, &mut materials, *quality);
+    spawn_farmstead(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        *quality,
+        &server,
+    );
+    spawn_pines(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        *quality,
+        &server,
+    );
     spawn_grass(&mut commands, &mut meshes, &mut materials, *quality);
     commands.spawn((
         DirectionalLight {
@@ -156,40 +175,6 @@ fn spawn_coast(
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
 ) {
-    let meadow = materials.add(Color::srgb(0.39, 0.49, 0.20));
-    let limestone = materials.add(Color::srgb(0.72, 0.70, 0.56));
-    let pale_stone = materials.add(Color::srgb(0.85, 0.82, 0.68));
-    let sea = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.055, 0.24, 0.31),
-        perceptual_roughness: 0.35,
-        ..default()
-    });
-    let shallows = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.12, 0.44, 0.45),
-        perceptual_roughness: 0.42,
-        ..default()
-    });
-    let nearshore = materials.add(Color::srgb(0.28, 0.54, 0.48));
-    commands.spawn((
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(1200.0, 1200.0))),
-        MeshMaterial3d(sea),
-        Transform::from_xyz(0.0, -0.38, 0.0),
-    ));
-    for (scale, height, material) in [
-        (1.65, -0.36, shallows),
-        (1.25, -0.34, nearshore),
-        (1.07, -0.29, limestone.clone()),
-        (1.0, 0.2, meadow),
-    ] {
-        let mut surface = commands.spawn((
-            Mesh3d(meshes.add(fan_mesh(scale, height))),
-            MeshMaterial3d(material),
-            Transform::default(),
-        ));
-        if scale == 1.0 {
-            surface.insert(SeasonalSurface::Meadow);
-        }
-    }
     let foam = materials.add(StandardMaterial {
         base_color: Color::srgb(0.46, 0.63, 0.57),
         cull_mode: None,
@@ -205,30 +190,6 @@ fn spawn_coast(
             bevy::light::NotShadowCaster,
         ));
     }
-    // Shared meshes/materials let Bevy batch repeated rocks and vegetation.
-    let rock = meshes.add(Sphere::new(1.0).mesh().ico(1).expect("valid icosphere"));
-    for i in 0..64 {
-        let p = coast_point(i, 1.01);
-        commands.spawn((
-            Mesh3d(rock.clone()),
-            MeshMaterial3d(if i % 3 == 0 {
-                pale_stone.clone()
-            } else {
-                limestone.clone()
-            }),
-            Transform::from_xyz(p.x, -0.10, p.z).with_scale(Vec3::new(
-                0.65 + noise(i as u32),
-                0.25 + noise(i as u32 + 80) * 0.2,
-                0.5,
-            )),
-        ));
-    }
-    // Existing limestone obstacle retains its collision footprint.
-    commands.spawn((
-        Mesh3d(rock.clone()),
-        MeshMaterial3d(pale_stone),
-        Transform::from_xyz(-7.0, 0.4, 1.0).with_scale(Vec3::new(1.5, 0.45, 0.6)),
-    ));
 }
 
 fn spawn_farmstead(
@@ -236,16 +197,17 @@ fn spawn_farmstead(
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
     quality: VisualQuality,
+    server: &AssetServer,
 ) {
     let timber = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.27, 0.17, 0.10),
+        base_color: Color::srgb(0.72, 0.72, 0.72),
         perceptual_roughness: 0.95,
-        ..default()
+        ..crate::coast::material(server, "wood")
     });
     let warm_wood = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.42, 0.28, 0.14),
+        base_color: Color::srgb(1.0, 1.0, 1.0),
         perceptual_roughness: 0.95,
-        ..default()
+        ..crate::coast::material(server, "wood")
     });
     let thatch = materials.add(StandardMaterial {
         base_color: Color::srgb(0.85, 0.72, 0.44),
@@ -378,26 +340,36 @@ fn spawn_pines(
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
     quality: VisualQuality,
+    server: &AssetServer,
 ) {
     let timber = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.27, 0.17, 0.10),
+        base_color: Color::srgb(0.72, 0.72, 0.72),
         perceptual_roughness: 0.95,
-        ..default()
+        ..crate::coast::material(server, "wood")
     });
     // Shared pine positions also define trunk clearance for first-person walking.
     let foliage = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.16, 0.29, 0.16),
+        base_color: Color::srgb(0.24, 0.34, 0.25),
+        cull_mode: None,
         perceptual_roughness: 1.0,
         ..default()
     });
     let pine = meshes.add(crate::art::foliage());
-    let trunk = meshes.add(Cylinder::new(0.13, 2.4));
+    let trunk = meshes.add(Cone::new(0.16, 3.1));
+    let branch = meshes.add(crate::art::tube(
+        &[
+            Vec3::ZERO,
+            Vec3::new(0.4, -0.03, 0.),
+            Vec3::new(0.8, -0.10, 0.),
+        ],
+        0.018,
+    ));
     for i in 0..9 {
         let Vec2 { x, y: z } = pine_position(i);
         commands.spawn((
             Mesh3d(trunk.clone()),
             MeshMaterial3d(timber.clone()),
-            Transform::from_xyz(x, 1.2, z),
+            Transform::from_xyz(x, 1.75, z),
         ));
         for layer in 0..5 {
             let h = 1.20 + layer as f32 * 0.48;
@@ -407,6 +379,13 @@ fn spawn_pines(
                 let angle = bough as f32 * std::f32::consts::TAU / branches as f32
                     + layer as f32 * 0.71
                     + i as f32;
+                commands.spawn((
+                    Mesh3d(branch.clone()),
+                    MeshMaterial3d(timber.clone()),
+                    Transform::from_xyz(x, h, z)
+                        .with_rotation(Quat::from_rotation_y(-angle))
+                        .with_scale(Vec3::splat(width)),
+                ));
                 let offset = Vec2::new(angle.cos(), angle.sin()) * width * 0.40;
                 commands.spawn((
                     Mesh3d(pine.clone()),
@@ -417,7 +396,7 @@ fn spawn_pines(
                         z + offset.y,
                     )
                     .with_rotation(Quat::from_rotation_y(angle))
-                    .with_scale(Vec3::new(width * 0.72, 0.34, width * 0.52)),
+                    .with_scale(Vec3::new(width * 0.86, 0.8, width * 0.72)),
                 ));
             }
         }
@@ -432,7 +411,7 @@ fn spawn_grass(
 ) {
     let grass = meshes.add(grass_mesh());
     let grass_mat = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.47, 0.53, 0.23),
+        base_color: Color::srgb(0.61, 0.66, 0.43),
         cull_mode: None,
         perceptual_roughness: 1.0,
         ..default()
@@ -443,7 +422,7 @@ fn spawn_grass(
         // Keep house, work sites and the south stockpile approach visually clear.
         let field = crate::farming::FIELD_CENTER;
         if !walkable(Vec2::new(x, z))
-            || (x < -1.0 && z > 0.0)
+            || (x < -5.8 && z > 4.5)
             || ((x - field.x).abs() < 2.1 && (z - field.y).abs() < 1.5)
         {
             continue;
@@ -509,7 +488,7 @@ fn daylight(
         transform.rotation = rotation;
         light.illuminance = illuminance;
         light.color = if (6.0..9.0).contains(&day.hour) || (16.0..20.0).contains(&day.hour) {
-            Color::srgb(1.0, 0.80, 0.59)
+            Color::srgb(1.0, 0.90, 0.77)
         } else {
             Color::srgb(0.91, 0.94, 1.0)
         };
@@ -625,7 +604,14 @@ fn seasonal_palette(
     for (surface, handle) in &surfaces {
         if let Some(mut material) = materials.get_mut(&handle.0) {
             material.base_color = match surface {
-                SeasonalSurface::Meadow => meadow,
+                SeasonalSurface::Meadow => {
+                    let c = meadow.to_srgba();
+                    Color::srgb(
+                        0.80 + c.red * 0.4,
+                        0.80 + c.green * 0.4,
+                        0.80 + c.blue * 0.4,
+                    )
+                }
                 SeasonalSurface::Grass => grass,
             };
         }

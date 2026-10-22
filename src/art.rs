@@ -218,24 +218,36 @@ pub fn tube(path: &[Vec3], radius: f32) -> Mesh {
     )
 }
 pub fn foliage() -> Mesh {
-    use bevy::mesh::VertexAttributeValues;
-    let mut shape = Sphere::new(1.).mesh().ico(2).expect("foliage mesh");
-    let Some(VertexAttributeValues::Float32x3(points)) =
-        shape.attribute_mut(Mesh::ATTRIBUTE_POSITION)
-    else {
-        unreachable!()
-    };
+    // Open, layered needle sprays leave sky holes instead of a solid foliage balloon.
+    let mut points = Vec::new();
+    let mut normals = Vec::new();
     let mut colors = Vec::new();
-    for point in points {
-        let p = Vec3::from_array(*point);
-        let ripple = 1. + 0.11 * (p.x * 13. + p.z * 9.).sin() * (p.y * 11. - p.x * 5.).cos();
-        *point = (p * ripple).to_array();
-        let tone = 0.82 + 0.14 * (p.x * 5. + p.z * 8.).sin() + p.y * 0.06;
-        colors.push([tone, tone, tone, 1.]);
+    let mut uv = Vec::new();
+    for branch in 0..13 {
+        let angle = branch as f32 * 2.39996;
+        let direction = Vec3::new(angle.cos(), 0., angle.sin());
+        let side = direction.cross(Vec3::Y);
+        let length = 0.55 + crate::world::noise(branch + 60) * 0.45;
+        for needle in 0..18 {
+            let t = needle as f32 / 18.;
+            let centre = direction * t * length + Vec3::Y * (0.22 * (1. - t) - 0.12 * t * t);
+            let width = 0.16 * (1. - t) + 0.025;
+            for sign in [-1., 1.] {
+                let a = centre - direction * 0.08;
+                let b = centre + side * sign * width - direction * 0.13 + Vec3::Y * 0.025;
+                let c = centre + direction * 0.10 + Vec3::Y * 0.04;
+                let n = (b - a).cross(c - a).normalize();
+                for (p, tex) in [(a, [0., 0.]), (b, [1., 0.]), (c, [0.5, 1.])] {
+                    points.push(p.to_array());
+                    normals.push(n.to_array());
+                    uv.push(tex);
+                    let light = 0.7 + crate::world::noise(branch * 20 + needle) * 0.3;
+                    colors.push([light * 0.84, light, light * 0.83, 1.]);
+                }
+            }
+        }
     }
-    shape.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
-    shape.compute_smooth_normals();
-    shape
+    mesh(points, normals, colors, uv)
 }
 #[derive(Component, Clone, Copy)]
 pub struct Limb {
