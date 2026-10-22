@@ -5,6 +5,7 @@ mod farming;
 mod fishing;
 mod hearth;
 mod household;
+mod inspection;
 mod livestock;
 mod orders;
 mod performance;
@@ -66,6 +67,7 @@ fn main() -> AppExit {
             performance::PerformancePlugin,
             session::SessionPlugin,
             shipping::ShippingPlugin,
+            inspection::InspectionPlugin,
         ))
         .run()
 }

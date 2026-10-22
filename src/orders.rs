@@ -12,6 +12,7 @@ pub struct OrdersPlugin;
 impl Plugin for OrdersPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<OrderState>()
+            .init_resource::<crate::inspection::Inspection>()
             .init_resource::<PendingOrders>()
             .add_observer(queue_button)
             .add_systems(Update, issue_orders.after(CameraInput).in_set(OrderInput));
@@ -161,6 +162,13 @@ fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
 }
 // A deterministic ray/sphere pick of the visible crown (or stump after felling).
 fn pick_tree(origin: Vec3, direction: Vec3, settlement: &Settlement) -> Option<usize> {
+    pick_tree_hit(origin, direction, settlement).map(|(i, _)| i)
+}
+pub(crate) fn pick_tree_hit(
+    origin: Vec3,
+    direction: Vec3,
+    settlement: &Settlement,
+) -> Option<(usize, f32)> {
     TREE_POSITIONS
         .iter()
         .enumerate()
@@ -180,13 +188,13 @@ fn pick_tree(origin: Vec3, direction: Vec3, settlement: &Settlement) -> Option<u
             (distance >= 0.0).then_some((i, distance))
         })
         .min_by(|a, b| a.1.total_cmp(&b.1))
-        .map(|(i, _)| i)
 }
 #[derive(bevy::ecs::system::SystemParam)]
 struct OrderControls<'w> {
     keys: Res<'w, ButtonInput<KeyCode>>,
     mouse: Res<'w, ButtonInput<MouseButton>>,
     rig: Res<'w, CameraRig>,
+    inspection: Res<'w, crate::inspection::Inspection>,
 }
 #[derive(Resource, Default)]
 struct PendingOrders(Vec<OrderButton>);
@@ -216,6 +224,7 @@ fn issue_orders(
     }
     if input.rig.mode == CameraMode::Strategy {
         if input.mouse.just_pressed(MouseButton::Left)
+            && !input.inspection.claimed_click
             && let Some(cursor) = window.cursor_position()
             && cursor.y < window.height() - ORDER_PANEL_HEIGHT - ORDER_PANEL_BOTTOM - 8.0
             && let Ok((camera, transform)) = camera.single()
