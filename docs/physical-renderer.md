@@ -16,18 +16,20 @@ engine fork. A fork alone would not replace poor scene art. The runtime now uses
   atmosphere-generated diffuse irradiance and prefiltered environment reflections.
 - Raw solar illuminance filtered by the atmosphere, white incident sunlight,
   photographic exposure and ACES tonemapping. High's former distance fog and
-  large uniform ambient fill are removed to avoid double haze and flat shadows.
+  large daytime uniform ambient fill are removed to avoid double haze and flat shadows.
 - Temporally filtered cascaded shadows and contact shadows, alongside existing
   HDR, SSAO and TAA. Shadow coverage is tuned to the walkable coastal map.
 - One solar frame derived directly from the saved presentation hour. The sun
   crosses below the horizon at night. Exposure has no temporal adaptation state,
   so camera switches and F9 do not require convergence to the saved hour.
-  Night adds a 0.25 lux cool directional fill and bounded photographic exposure
-  (EV 8–13). Daylight exposure remains EV 13 through the horizon crossing;
+  Night uses an artistic 800 lux cool directional fill, a 400 lux ambient
+  floor at EV 8, scaling both fills with exposure through twilight to avoid
+  a dark interval before full night. Photographic exposure stays within EV 8–13. Daylight exposure remains EV 13 through the horizon crossing;
   a smooth transition begins below the horizon, avoiding extreme amplification
   of the still-bright twilight sky. Lighting updates precede exposure updates
-  in the same frame. The night fill is an artistic full-moon floor, not a lunar
-  ephemeris. The bounded gain intentionally leaves night darker than daytime.
+  in the same frame. The night fill is deliberately brighter than real moonlight
+  for playability; it is not a lunar ephemeris. Night remains darker than daytime.
+  New sessions start at 10:00; the presentation day lasts 60 minutes.
 
 Low retains the old light/fog pipeline without atmospheric environment-map
 compute passes, contact shadows or TAA. It shares the revised art and terrain
@@ -73,3 +75,23 @@ Review needle edges near/far, roof fibers, terrain detail and water in both view
 A visual improvement here does not establish parity with the reference: authored
 characters, architecture, stonework and vegetation still need substantial work.
 Linux software-Vulkan tests are functional evidence, not native Metal performance.
+
+## Night readability regression
+
+The initial EV 8 floor left a 0.25 lux moon effectively invisible. The gameplay
+night floor now uses an artistic 800 lux directional fill and 400 lux ambient
+fill at EV 8, scaled with exposure through twilight. This preserves a useful
+surface signal while the physical sky fades; it does not simulate real lunar
+illuminance. New sessions start at 10:00 and take 60 minutes per visual day.
+Saved hours remain valid; loading a night save does not reset the sun.
+
+High-quality Linux software-Vulkan captures show the actual rendered settlement
+at sunset and midnight. The ground, house, coast and residents remain visible.
+The sunset capture uses an 800×500 test window; midnight uses 1280×800. HUD
+layout at the smaller size is not a new default. Software-renderer timings in
+these images are not hardware performance measurements. Metal still requires
+native review. Rust checks include an exposure-scaled diffuse-light lower bound
+at 18:11, 18:30, 20:18, 21:00, midnight and 03:00.
+
+![Twilight readability](screenshots/playable-night-twilight.png)
+![Midnight readability](screenshots/playable-night-midnight.png)

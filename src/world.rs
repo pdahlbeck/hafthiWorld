@@ -30,7 +30,7 @@ pub struct Daylight {
 impl Default for Daylight {
     fn default() -> Self {
         Self {
-            hour: 16.0,
+            hour: 10.0,
             running: true,
         }
     }
@@ -475,7 +475,7 @@ fn daylight(
         day.hour = (day.hour + 3.0).rem_euclid(24.0);
     }
     if day.running {
-        day.hour = (day.hour + time.delta_secs() / 30.0).rem_euclid(24.0);
+        day.hour = (day.hour + time.delta_secs() / 150.0).rem_euclid(24.0);
     }
     let elevation = ((day.hour - 6.0) / 24.0 * std::f32::consts::TAU).sin();
     let daylight = ((elevation + 0.15) / 0.4).clamp(0.0, 1.0);
@@ -486,7 +486,7 @@ fn daylight(
     }
     let physical = *quality == VisualQuality::High;
     ambient.brightness = if physical {
-        0.0
+        crate::rendering::solar_frame(day.hour).ambient
     } else {
         60.0 + daylight * 200.0
     };

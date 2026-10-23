@@ -41,6 +41,7 @@ pub(crate) struct SolarFrame {
     pub rotation: Quat,
     pub exposure: f32,
     pub moonlight: f32,
+    pub ambient: f32,
 }
 pub(crate) fn solar_frame(hour: f32) -> SolarFrame {
     let hour = hour.rem_euclid(24.0);
@@ -59,10 +60,17 @@ pub(crate) fn solar_frame(hour: f32) -> SolarFrame {
     // five stops and introduce it only as the sun sinks through twilight.
     let night = ((-altitude - 0.10) / 0.22).clamp(0.0, 1.0);
     let night = night * night * (3.0 - 2.0 * night);
+    let exposure = 13.0 - 5.0 * night;
+    // Match fill to the current exposure throughout twilight, avoiding a dark
+    // trough before the camera reaches its EV 8 night floor.
+    let night_gain = 2.0_f32.powf(exposure - 8.0) * (1.0 - t);
     SolarFrame {
         rotation: Transform::default().looking_to(rays, Vec3::Y).rotation,
-        exposure: 13.0 - 5.0 * night,
-        moonlight: 0.25 * (1.0 - t),
+        exposure,
+        // Deliberately artistic night illumination, matched to EV 8. A real
+        // 0.25 lux moon was effectively black at that camera exposure.
+        moonlight: 800.0 * night_gain,
+        ambient: 400.0 * night_gain,
     }
 }
 fn expose(
@@ -81,6 +89,17 @@ fn expose(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn dusk_and_night_have_an_exposure_matched_readability_floor() {
+        for hour in [18.0 + 11.0 / 60.0, 18.5, 20.3, 21.0, 0.0, 3.0] {
+            let frame = solar_frame(hour);
+            // Approximate diffuse signal for a 20% grey surface at the camera.
+            // This is a light/exposure contract, not a GPU appearance test.
+            let signal = 0.2 * (frame.moonlight * 0.5 + frame.ambient)
+                / (std::f32::consts::PI * 1.2 * 2.0_f32.powf(frame.exposure));
+            assert!(signal > 0.10 && signal < 0.25, "{hour}: {signal}");
+        }
+    }
     #[test]
     fn exposure_tracks_the_current_hour_without_a_stale_frame() {
         let mut app = App::new();
@@ -119,7 +138,7 @@ mod tests {
         assert!((solar_frame(12.0).rotation * Vec3::NEG_Z).y < -0.7);
         assert!((solar_frame(0.0).rotation * Vec3::NEG_Z).y > 0.7);
         assert_eq!(solar_frame(12.0).moonlight, 0.0);
-        assert_eq!(solar_frame(0.0).moonlight, 0.25);
+        assert_eq!(solar_frame(0.0).moonlight, 800.0);
         for step in 0..1440 {
             let hour = step as f32 / 60.0;
             let f = solar_frame(hour);
