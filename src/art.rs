@@ -129,28 +129,60 @@ pub fn tunic() -> Mesh {
         true,
     )
 }
+pub fn roof_height(x: f32, z: f32) -> f32 {
+    let bundle = (z * 73.0 + (z * 11.0).sin() * 0.8).sin() * 0.009;
+    3.51 - 1.19 * (x.abs() / 2.14).powf(1.08) - 0.07 * (z / 2.85).powi(2) + bundle
+}
 pub fn thatch_roof() -> Mesh {
-    surface(
-        48,
-        84,
+    let mut roof = surface(
+        64,
+        112,
         |u, v| {
             let x = (u - 0.5) * 4.28;
             let z = (v - 0.5) * 5.7;
-            let grooves = (v * 42. * std::f32::consts::TAU).cos() * 0.018;
-            Vec3::new(
-                x,
-                3.51 - 1.19 * (x.abs() / 2.14).powf(1.08) - 0.07 * (z / 2.85).powi(2) + grooves,
-                z,
-            )
+            Vec3::new(x, roof_height(x, z), z)
         },
         |u, v| {
-            let grain = (v * 42. * std::f32::consts::TAU).cos() * 0.06;
-            let patch = (u * 31. + v * 17.).sin() * (v * 43.).sin() * 0.025;
-            let light = 0.82 + grain + patch;
-            [light, light * 0.95, light * 0.86, 1.]
+            let weather = 0.9 + 0.08 * (u * 19.0 + v * 8.0).sin();
+            [weather, weather, weather, 1.0]
         },
         true,
-    )
+    );
+    // Vertical texture fibers run ridge-to-eave, with a 1.2 m material tile.
+    if let Some(bevy::mesh::VertexAttributeValues::Float32x2(uv)) =
+        roof.attribute_mut(Mesh::ATTRIBUTE_UV_0)
+    {
+        for p in uv {
+            *p = [p[1] * 4.75, p[0] * 3.57];
+        }
+    }
+    roof.generate_tangents().expect("roof UVs");
+    roof
+}
+/// Irregular overlapping cut reed ends at the eaves, merged into one draw.
+pub fn thatch_ends() -> Mesh {
+    let mut result: Option<Mesh> = None;
+    for side in [-1.0, 1.0] {
+        for i in 0..230 {
+            let z = -2.84 + i as f32 * 5.68 / 229.0;
+            let seed = i + if side > 0.0 { 500 } else { 900 };
+            let length = 0.13 + crate::world::noise(seed) * 0.13;
+            let x = side * (2.12 + crate::world::noise(seed + 1) * 0.035);
+            let y = roof_height(x, z);
+            let reed = tube(
+                &[
+                    Vec3::new(x - side * 0.12, y + 0.06, z),
+                    Vec3::new(x, y - length, z + 0.009),
+                ],
+                0.005,
+            );
+            match &mut result {
+                Some(mesh) => mesh.merge(&reed).expect("reed layout"),
+                None => result = Some(reed),
+            }
+        }
+    }
+    result.expect("reed ends")
 }
 pub fn boat_hull(inner: bool) -> Mesh {
     surface(
@@ -218,32 +250,34 @@ pub fn tube(path: &[Vec3], radius: f32) -> Mesh {
     )
 }
 pub fn foliage() -> Mesh {
-    // Open, layered needle sprays leave sky holes instead of a solid foliage balloon.
+    // Three curved alpha-cut branch ribbons. The bough image contains real gaps;
+    // crossed planes retain volume from overhead and walkable camera angles.
     let mut points = Vec::new();
     let mut normals = Vec::new();
-    let mut colors = Vec::new();
     let mut uv = Vec::new();
-    for branch in 0..13 {
-        let angle = branch as f32 * 2.39996;
-        let direction = Vec3::new(angle.cos(), 0., angle.sin());
-        let side = direction.cross(Vec3::Y);
-        let length = 0.55 + crate::world::noise(branch + 60) * 0.45;
-        for needle in 0..18 {
-            let t = needle as f32 / 18.;
-            let centre = direction * t * length + Vec3::Y * (0.22 * (1. - t) - 0.12 * t * t);
-            let width = 0.16 * (1. - t) + 0.025;
-            for sign in [-1., 1.] {
-                let a = centre - direction * 0.08;
-                let b = centre + side * sign * width - direction * 0.13 + Vec3::Y * 0.025;
-                let c = centre + direction * 0.10 + Vec3::Y * 0.04;
-                let n = (b - a).cross(c - a).normalize();
-                for (p, tex) in [(a, [0., 0.]), (b, [1., 0.]), (c, [0.5, 1.])] {
-                    points.push(p.to_array());
-                    normals.push(n.to_array());
-                    uv.push(tex);
-                    let light = 0.7 + crate::world::noise(branch * 20 + needle) * 0.3;
-                    colors.push([light * 0.84, light, light * 0.83, 1.]);
-                }
+    let mut colors = Vec::new();
+    for sheet in 0..3 {
+        let angle = (sheet as f32 - 1.0) * 0.70;
+        let side = Vec3::new(0.0, angle.sin(), angle.cos());
+        let up = Vec3::X;
+        let normal = up.cross(side).normalize();
+        for row in 0..4 {
+            for (v, sign) in [
+                (0.0, -1.0),
+                (1.0, -1.0),
+                (1.0, 1.0),
+                (0.0, -1.0),
+                (1.0, 1.0),
+                (0.0, 1.0),
+            ] {
+                let t = (row as f32 + v) / 4.0;
+                let p = side * sign * 0.65
+                    + up * t * 1.18
+                    + normal * ((t * std::f32::consts::PI).sin() * 0.12);
+                points.push(p.to_array());
+                normals.push(normal.to_array());
+                uv.push([sign * 0.5 + 0.5, 1.0 - t]);
+                colors.push([1.0, 1.0, 1.0, 1.0]);
             }
         }
     }
@@ -389,6 +423,8 @@ mod tests {
             boat_hull(true),
             boat_deck(),
             tube(&[Vec3::ZERO, Vec3::Z], 0.1),
+            foliage(),
+            thatch_ends(),
         ];
         for (shape, mesh) in shapes.iter().enumerate() {
             let Some(VertexAttributeValues::Float32x3(points)) =

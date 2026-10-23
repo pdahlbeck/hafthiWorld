@@ -14,9 +14,9 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> FragmentOut
     // Same beach crest and linear underwater profile as the CPU height field.
     let crest = 8.7 + 1.4*sin(p.x*0.075) + 0.5*sin(p.x*0.29);
     let depth = max(0.0, (p.y-crest-1.2)*0.29);
-    let a = dot(p,vec2<f32>(0.71,0.35))*3.1-t*1.3;
-    let b = dot(p,vec2<f32>(-0.28,0.93))*6.7+t*1.8;
-    let c = dot(p,vec2<f32>(0.87,-0.31))*14.0-t*2.1;
+    let a = dot(p,vec2<f32>(0.71,0.35))*3.1-t*1.3+0.8*sin(p.y*1.3+t*0.2);
+    let b = dot(p,vec2<f32>(-0.28,0.93))*6.7+t*1.8+0.65*sin(p.x*0.93);
+    let c = dot(p,vec2<f32>(0.87,-0.31))*14.0-t*2.1+0.8*sin(p.y*3.1);
     pbr.N = normalize(vec3<f32>(0.055*cos(a)+0.018*cos(c),1.0,0.045*cos(b)+0.013*cos(c)));
     let fresnel = 0.04+0.96*pow(1.0-clamp(dot(pbr.N,pbr.V),0.0,1.0),5.0);
     let shallow = exp(-depth*0.9);
@@ -26,7 +26,7 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> FragmentOut
     var out: FragmentOutput;
     out.color = apply_pbr_lighting(pbr);
     let sky = mix(vec3<f32>(0.045,0.065,0.10),vec3<f32>(0.33,0.43,0.50),water.values.y);
-    out.color = vec4<f32>(out.color.rgb+sky*(0.18+fresnel*0.7),out.color.a);
+    out.color = vec4<f32>(out.color.rgb+sky*(0.18+fresnel*0.7)*(1.0-water.values.z),out.color.a);
     out.color = main_pass_post_lighting_processing(pbr,out.color);
     return out;
 }

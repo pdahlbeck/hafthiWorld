@@ -102,3 +102,11 @@ cargo run --release --locked -- --quality low
 5. Check T/Y lighting and F3 native frame statistics. Linux software-Vulkan
    captures verify functionality and shader compilation; they are not macOS
    Metal performance evidence. No new performance benchmark matrix is claimed.
+
+## Subsequent physical-lighting review
+
+The screenshot baseline in this document was rejected visually by the user.
+[Physical coastal rendering](physical-renderer.md) supersedes the High lighting,
+pine and roof material descriptions above. The shared height field, navigation,
+worker identities and economy contracts remain applicable. Neither document
+claims that the supplied reference image's quality has been reached.

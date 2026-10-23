@@ -2,6 +2,17 @@
 
 Rust + Bevy 0.20 settlement simulation inspired by Viking Age Gotland. The second scoped milestone from [issue #1](https://github.com/pdahlbeck/hafthiWorld/issues/1) adds a playable resource chain: **order tree felling → carry logs to storage → carry stored timber to a construction site → finish a timber rack**. Strategy and first person observe the same running ECS world. Milestone 3 adds an original procedural coastal visual pass and portable performance instrumentation. The following small slices add a crop/seed loop, a two-sheep fleece chain and a first owned household pantry and a finite shore barter offer, using the same worker and storage. The founder, optional coastal helper, three finite trees and material-backed timber rack remain the same shared simulation in both views. A fresh session is solo; **N** invites the second resident and assigns coastal work, as described below. Earlier smoke tests assume N is omitted.
 
+## Current graphics review
+
+High now uses Bevy's physical atmosphere, sky-driven environment illumination,
+photographic exposure, ACES and contact shadows. Original textured reed roofing
+and alpha-cut pine branches replace the flat roof and triangular needle fans;
+terrain has broad material variation rather than a uniformly speckled surface.
+Use `cargo run --release --locked -- --quality high`; **F4** hides the HUD.
+Low keeps the lighter lighting pipeline. See [renderer review](docs/physical-renderer.md)
+for architecture, controls and remaining visual limitations. These changes do
+not establish the supplied reference image's finished-game quality.
+
 ## Run
 
 Install current stable Rust using [rustup](https://rustup.rs/) (edition 2024; tested here with Rust 1.99.1):

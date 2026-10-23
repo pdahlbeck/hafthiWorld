@@ -119,8 +119,17 @@ fn build_mips(image: &mut Image, kind: Map) {
                             if color && channel < 3 {
                                 c = linear(c);
                             }
+                            if matches!(kind, Map::Color) && channel < 3 {
+                                c *= previous[offset + 3] as f32 / 255.0;
+                            }
                             pixel[channel] += c * weight;
                         }
+                    }
+                }
+                if matches!(kind, Map::Color) {
+                    let alpha = pixel[3];
+                    for c in &mut pixel[..3] {
+                        *c = if alpha > 0.000001 { *c / alpha } else { 0.0 };
                     }
                 }
                 if matches!(kind, Map::Normal) {
@@ -153,6 +162,24 @@ fn build_mips(image: &mut Image, kind: Map) {
 mod tests {
     use super::*;
     use bevy::{asset::RenderAssetUsages, render::render_resource::Extent3d};
+    #[test]
+    fn transparent_texels_do_not_darken_pine_mip_edges() {
+        let mut image = Image::new_fill(
+            Extent3d {
+                width: 2,
+                height: 2,
+                depth_or_array_layers: 1,
+            },
+            TextureDimension::D2,
+            &[0, 0, 0, 0],
+            TextureFormat::Rgba8UnormSrgb,
+            RenderAssetUsages::default(),
+        );
+        image.data.as_mut().unwrap()[..4].copy_from_slice(&[180, 220, 110, 255]);
+        build_mips(&mut image, Map::Color);
+        let last = &image.data.as_ref().unwrap()[16..20];
+        assert_eq!(last, &[180, 220, 110, 64]);
+    }
     #[test]
     fn mip_chain_averages_srgb_in_linear_light_and_reaches_one_texel() {
         let mut image = Image::new_fill(

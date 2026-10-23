@@ -1,7 +1,7 @@
 //! Two views of one running world. Camera transitions never touch simulation state.
 use crate::world;
 use bevy::{
-    camera::Hdr,
+    camera::{Exposure, Hdr},
     input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll},
     prelude::*,
     window::{CursorGrabMode, CursorOptions, PrimaryWindow},
@@ -104,9 +104,15 @@ fn setup(
         },
     ));
     if quality.is_some_and(|q| *q == crate::performance::VisualQuality::High) {
+        camera.remove::<DistanceFog>();
         camera.insert((
             Hdr,
+            Exposure { ev100: 13.0 },
+            bevy::core_pipeline::tonemapping::Tonemapping::AcesFitted,
+            bevy::pbr::AtmosphereSettings::default(),
+            bevy::light::AtmosphereEnvironmentMapLight::default(),
             Msaa::Off,
+            bevy::light::ShadowFilteringMethod::Temporal,
             bevy::pbr::ScreenSpaceAmbientOcclusion {
                 radius: 0.6,
                 constant_object_thickness: 0.10,

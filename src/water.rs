@@ -51,10 +51,20 @@ fn setup(
 fn animate(
     time: Res<Time>,
     day: Res<crate::world::Daylight>,
+    quality: Res<crate::performance::VisualQuality>,
     mut materials: ResMut<Assets<WaterMaterial>>,
 ) {
     let daylight = (((day.hour - 6.) / 24. * std::f32::consts::TAU).sin() + 0.15).clamp(0., 1.);
     for (_, m) in materials.iter_mut() {
-        m.extension.values = Vec4::new(time.elapsed_secs(), daylight, 0., 0.);
+        m.extension.values = Vec4::new(
+            time.elapsed_secs(),
+            daylight,
+            if *quality == crate::performance::VisualQuality::High {
+                1.0
+            } else {
+                0.0
+            },
+            0.,
+        );
     }
 }
