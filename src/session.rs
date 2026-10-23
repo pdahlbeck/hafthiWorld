@@ -38,6 +38,8 @@ struct Snapshot {
     workers: Vec<Worker>,
     seconds: f64,
     daylight: Daylight,
+    #[serde(default)]
+    resident_motion: crate::character_motion::MotionMemory,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -61,11 +63,16 @@ impl Snapshot {
             workers,
             seconds: world.resource::<SimulationClock>().0,
             daylight: world.resource::<Daylight>().clone(),
+            resident_motion: world
+                .get_resource::<crate::character_motion::MotionMemory>()
+                .cloned()
+                .unwrap_or_default(),
         }
     }
     fn validate(&self) -> Result<(), String> {
         let s = &self.settlement;
-        if !s.voyage.valid(&s.flock.wool)
+        if !self.resident_motion.valid(self.seconds)
+            || !s.voyage.valid(&s.flock.wool)
             || !self.daylight.hour.is_finite()
             || !(0.0..24.0).contains(&self.daylight.hour)
             || !s.farm.growth.is_finite()
@@ -202,6 +209,7 @@ impl Snapshot {
         world.insert_resource(self.settlement);
         world.resource_mut::<SimulationClock>().0 = self.seconds;
         world.insert_resource(self.daylight);
+        world.insert_resource(self.resident_motion);
         world.resource_mut::<Session>().paused = true;
     }
 }
@@ -366,6 +374,51 @@ mod tests {
     fn bytes(app: &mut App) -> Vec<u8> {
         Snapshot::capture(app.world_mut()).encode().unwrap()
     }
+    #[test]
+    fn snapshot_restores_mid_blend_and_accepts_legacy_payload_without_motion() {
+        use crate::character_motion::{Clip, MotionMemory};
+        let mut game = app();
+        game.world_mut().resource_mut::<SimulationClock>().0 = 12.14;
+        let mut memory = MotionMemory::default();
+        memory.update(1, Clip::Idle, 3.10, 12.);
+        memory.update(1, Clip::Walk, -3.10, 12.);
+        let expected = memory.update(1, Clip::Walk, -3.10, 12.14);
+        game.world_mut().insert_resource(memory);
+        let encoded = bytes(&mut game);
+        game.world_mut()
+            .resource_mut::<MotionMemory>()
+            .update(1, Clip::Work, 0., 18.);
+        Snapshot::decode(&encoded)
+            .unwrap()
+            .restore(game.world_mut());
+        assert_eq!(
+            game.world_mut()
+                .resource_mut::<MotionMemory>()
+                .update(1, Clip::Walk, -3.10, 12.14),
+            expected
+        );
+        assert_eq!(encoded, bytes(&mut game));
+
+        // Older version-one payloads predate the optional presentation state.
+        let mut envelope: SaveFile = serde_json::from_slice(&encoded).unwrap();
+        let mut payload: serde_json::Value = serde_json::from_str(&envelope.payload).unwrap();
+        payload.as_object_mut().unwrap().remove("resident_motion");
+        envelope.payload = serde_json::to_string(&payload).unwrap();
+        envelope.checksum = checksum(envelope.payload.as_bytes());
+        let legacy = serde_json::to_vec(&envelope).unwrap();
+        let old = Snapshot::decode(&legacy).unwrap();
+        assert!(old.resident_motion.valid(old.seconds));
+        old.restore(game.world_mut());
+        assert!(game.world().resource::<Session>().paused);
+        assert!(
+            game.world_mut()
+                .resource_mut::<MotionMemory>()
+                .update(1, Clip::Idle, 0., 12.14)
+                .weights[0]
+                > 0.99
+        );
+    }
+
     #[test]
     fn roundtrip_busy_two_resident_chain_resumes_identically() {
         let mut original = app();

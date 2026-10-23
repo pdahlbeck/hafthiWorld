@@ -2,14 +2,18 @@
 
 Rust + Bevy 0.20 settlement simulation inspired by Viking Age Gotland. The second scoped milestone from [issue #1](https://github.com/pdahlbeck/hafthiWorld/issues/1) adds a playable resource chain: **order tree felling → carry logs to storage → carry stored timber to a construction site → finish a timber rack**. Strategy and first person observe the same running ECS world. Milestone 3 adds an original procedural coastal visual pass and portable performance instrumentation. The following small slices add a crop/seed loop, a two-sheep fleece chain and a first owned household pantry and a finite shore barter offer, using the same worker and storage. The founder, optional coastal helper, three finite trees and material-backed timber rack remain the same shared simulation in both views. A fresh session is solo; **N** invites the second resident and assigns coastal work, as described below. Earlier smoke tests assume N is omitted.
 
-## Resident mesh review
+## Current resident review
 
-The rejected close-up prompted a character rebuild: anatomical hands, continuous
-neck/head geometry, one connected tunic, hidden trouser tops, blended boot shafts,
-scalp-fitted hair and authored skin colors. **Tab** now enters facing the founder
-in a fresh session; F4 hides the HUD. See [model review and limits](docs/resident-correction.md).
-This is a correction of specific model defects; the landscape and finished-game
-visual target remain unresolved.
+The runtime people now use MIT-licensed Rocketbox head/hand anatomy and skin
+maps with project-authored costume, an 80-joint skeleton and four native Bevy
+animation clips. Each worker blends from its own saved task/clock; contact IK
+corrects stance feet and reaches towards actual cargo. Space and F5/F9 preserve
+paused and mid-transition poses; older saves load with default blend state.
+The anatomical neck extends inside the collar and shares its upper-chest deformation.
+**Tab** enters facing the founder in a fresh session; **F4** hides the HUD.
+See [actual captures, provenance and remaining limits](docs/textured-residents.md).
+All people still share one face; full skin SSS, new behavior AI, landscape
+quality and the finished-game visual target remain unresolved.
 
 ## Current graphics review
 
@@ -485,3 +489,20 @@ The reference-driven renderer pass replaces the isolated island with a **120 × 
 An embedded forward-PBR water shader adds animated wave normals, shallow/deep color, a foam fringe and sky Fresnel shading above the actual seabed. Surface mip chains use linear-light color averaging, normalized normals and anisotropic filtering. Static gravel/wall/grass groups and shared crown variants limit per-object overhead. High adds HDR/TAA/SSAO; Low uses simpler camera effects and lower terrain/vegetation density. The home has timber framing, muted infill, stone footing and weathered thatch. The authored skin now also replaces helper, visitor and sailor bodies; each actual resident animates from their own saved work state. Visitors keep standing poses.
 
 **F4 toggles the HUD** for visual review. It changes UI visibility only; Space/F5/F9, Tab and the economy remain available. The initial strategy angle places the coast on the right. These changes build the rendering foundation towards the supplied image; distinct character/costume art, polished animation, roof/prop detail and further material/composition work remain. See [renderer architecture, limits and desktop test sequence](docs/rendering-target.md).
+
+## Current resident renderer: textured anatomy and native clips
+
+The runtime people now use MIT-licensed Rocketbox facial/hand anatomy and skin
+textures with project-authored clothing, an 80-joint skeleton and four native
+Bevy animation clips. Each worker blends from its own saved task/clock; contact
+IK corrects stance feet and reaches for actual cargo. Space and F5/F9 preserve
+paused and mid-transition poses. Visiting people breathe without gaining worker
+roles. Older saves load; new version-one payloads add optional animation state.
+
+This supersedes the earlier 15-joint/procedural resident descriptions above.
+It is an art/animation replacement, not a completed landscape overhaul, full
+skin SSS or new behavior/navigation AI. All people still share one face. See
+[provenance, architecture, limitations and authoring steps](docs/textured-residents.md).
+
+Run with `cargo run --release --locked -- --quality high` (the `--` before game
+options is required). Tab enters first person; Space pauses; F4 hides the HUD.

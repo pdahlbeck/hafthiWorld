@@ -445,7 +445,12 @@ mod tests {
                     "shape {shape} has bad normal {normal:?}"
                 );
             }
-            for (triangle, normals) in points.chunks_exact(3).zip(normals.chunks_exact(3)) {
+            for (triangle, normals) in points
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .zip(normals.as_chunks::<3>().0.iter())
+            {
                 let a = Vec3::from_array(triangle[0]);
                 let b = Vec3::from_array(triangle[1]);
                 let c = Vec3::from_array(triangle[2]);

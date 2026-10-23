@@ -407,8 +407,10 @@ mod tests {
             GrainLocation::Stored,
             GrainLocation::Home(1),
         ] {
-            let mut f = Farm::default();
-            f.phase = CropPhase::Ripe;
+            let mut f = Farm {
+                phase: CropPhase::Ripe,
+                ..Default::default()
+            };
             f.grain[0] = location;
             assert!(!f.request_reap());
             f.harvest_ordered = true; // Even an obsolete order cannot bypass the safeguard.
