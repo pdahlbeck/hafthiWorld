@@ -1,4 +1,4 @@
-//! One outbound collection of the shore visitor's already-paid wool.
+//! Outbound collection of the shore visitor's already-paid wool, once per round.
 use crate::{
     livestock::{WOOL_UNITS, WoolLocation},
     simulation::Settlement,
@@ -376,6 +376,7 @@ fn setup(
         Node {
             position_type: PositionType::Absolute,
             left: px(20),
+            max_width: percent(55),
             bottom: px(125),
             padding: UiRect::all(px(8)),
             ..default()
@@ -398,9 +399,16 @@ fn sync(
         };
     }
     for mut text in &mut status {
+        let completed =
+            s.shore_cycles.retired_rounds + u64::from(s.voyage.phase == VoyagePhase::Completed);
+        let next = if s.voyage.phase == VoyagePhase::Completed {
+            s.next_shore_round_blocker()
+                .unwrap_or("U: start the next coastal production and trade round")
+        } else {
+            s.voyage.label()
+        };
         text.0 = format!(
-            "Boat: {}\nWool: aboard {}/4 | exported {}/4",
-            s.voyage.label(),
+            "Boat: {next}\nWool: aboard {}/4 | exported {}/4 | completed voyages {completed}",
             s.flock.count(WoolLocation::Aboard),
             s.flock.count(WoolLocation::Exported)
         );

@@ -519,3 +519,38 @@ The wrist correction continues the anatomical hands into the sleeves with
 weighted forearm skin, removing the visible gap at each cuff. Export validation
 checks both connections through the animation clips and crossfades; see the
 [before/after portraits](docs/textured-residents.md#connected-hands-and-sleeves).
+
+## Repeat coastal work and annual trade
+
+The first coastal batch still uses the existing orders: **C** shear, **J** barter,
+**P** fish, **L** preserve, **H** supply home and **U** collect the paid wool.
+After that batch, **U** can authorize another complete coastal round instead of
+leaving the coast permanently exhausted. The boat panel explains what blocks it.
+
+A later round requires a later gameplay year, spring/summer, a full gameplay
+year of fleece regrowth after each sheep's shearing, a completed shipment, all
+four fish eaten at this home, both salt pouches consumed, all four wool bundles
+exported, and no outstanding coastal worker delivery. It never deletes existing
+stock to make room. Until all conditions hold, pressing U changes no inventory.
+
+Once accepted, U queues shearing, fishing, barter, salting and wool collection for
+the next batch. Home food supply keeps its existing standing order. New fish
+start uncaught, salt starts with the visitor, and wool starts on the sheep; the
+same actual workers must perform and carry every step. Coat size gradually
+regrows with world time. The same visual entities are reused for the next batch.
+The boat panel counts completed voyages across rounds, and fish meal and salting
+counters remain cumulative. Nothing repeats without U authorizing the next round.
+
+Regrowth pauses with Space, persists through Tab/F5/F9 and is independent of
+T/Y sunlight. Older saves default the new counters safely; pre-feature shorn
+sheep have no recorded growth delay. The next accepted round records the current
+year, so loading a late save does not grant missed years' worth of cargo.
+These yields, regrowth timing and a spring/summer trade window are gameplay
+choices, not archaeological claims. This adds repeat coastal work, not another
+household or more than two workers; new farmsteads remain the next expansion.
+
+To test: complete the first real C/J/P/L/H/U chain, wait for fleece growth and a
+later spring/summer, then press U. Follow the next round in either view, save
+while wool is carried and reload. Expect four additional fish meals, two salting
+batches and one additional completed voyage after the work finishes. The three-
+round simulation regression checks twelve actual fish meals and six batches.

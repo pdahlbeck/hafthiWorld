@@ -68,10 +68,14 @@ fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
             };
         }
         OrderButton::CollectWool => {
-            ui.feedback = if settlement.voyage.request() {
-                "Boat requested: waits for both completed salt trades, then collects the visitor's four paid wool bundles."
-            } else {
-                "The one wool collection voyage is already requested or completed."
+            ui.feedback = match settlement.request_shipment() {
+                Ok(false) => {
+                    "Boat requested: waits for both completed salt trades, then collects the visitor's four paid wool bundles."
+                }
+                Ok(true) => {
+                    "New coastal round: shear regrown fleece, catch fish, barter for salt and ship wool. Home supply keeps its existing order."
+                }
+                Err(reason) => reason,
             };
         }
         OrderButton::InviteHelper => {
@@ -85,7 +89,7 @@ fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
             ui.feedback = if settlement.fishery.request_fishing() {
                 "Fishing ordered: the worker catches and stores up to four real fish at the shore."
             } else {
-                "Fishing already ordered or this session's four-fish catch is exhausted."
+                "Fishing already ordered or this coastal round's four-fish catch is exhausted."
             };
         }
         OrderButton::SaltFish => {
@@ -127,7 +131,7 @@ fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
             ui.feedback = if settlement.flock.request_shear() {
                 "Shearing ordered. Sheep hold still; the worker clips and stores each wool bundle."
             } else {
-                "All sheep are already ordered or shorn. This slice has one fleece per sheep."
+                "All sheep are already ordered or shorn. Start a later coastal round with U after regrowth and delivery."
             };
         }
         OrderButton::Sow => {

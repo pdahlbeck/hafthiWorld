@@ -1,4 +1,4 @@
-//! A small persistent flock and finite fleece transport, shared by both cameras.
+//! A persistent flock, timed fleece regrowth and physical wool transport.
 use crate::simulation::{STOCKPILE, Settlement, Worker};
 use bevy::prelude::*;
 
@@ -29,6 +29,8 @@ pub struct Sheep {
 pub struct Flock {
     pub sheep: [Sheep; SHEEP_COUNT],
     pub wool: [WoolLocation; WOOL_UNITS],
+    #[serde(default)]
+    pub regrowth_remaining: [f64; SHEEP_COUNT],
     #[serde(with = "crate::session::vectors")]
     pub ground: [Vec2; WOOL_UNITS],
 }
@@ -46,6 +48,7 @@ impl Default for Flock {
                 grazing_seconds: 0.0,
             }),
             wool: [WoolLocation::Fleece; WOOL_UNITS],
+            regrowth_remaining: [0.0; SHEEP_COUNT],
             ground: [Vec2::ZERO; WOOL_UNITS],
         }
     }
@@ -64,6 +67,9 @@ impl Flock {
     pub fn graze(&mut self, seconds: f64) {
         if !seconds.is_finite() || seconds <= 0.0 {
             return;
+        }
+        for remaining in &mut self.regrowth_remaining {
+            *remaining = (*remaining - seconds).max(0.0);
         }
         for (i, sheep) in self.sheep.iter_mut().enumerate() {
             // An ordered sheep holds still for the worker; after shearing it can
@@ -85,6 +91,7 @@ impl Flock {
             return false;
         }
         sheep.shorn = true;
+        self.regrowth_remaining[i] = crate::calendar::YEAR_SECONDS;
         for offset in 0..WOOL_PER_SHEEP {
             let index = i * WOOL_PER_SHEEP + offset;
             self.wool[index] = WoolLocation::Ground;
@@ -239,12 +246,19 @@ fn sync(
             }
             LivestockVisual::Coat(i) => {
                 let shorn = flock.sheep[i].shorn;
-                transform.scale = if shorn {
-                    Vec3::new(0.34, 0.28, 0.52)
+                let grown = if shorn {
+                    (1.0 - flock.regrowth_remaining[i] / crate::calendar::YEAR_SECONDS) as f32
                 } else {
-                    Vec3::new(0.42, 0.38, 0.62)
+                    1.0
                 };
-                let color = if shorn { &colors.shorn } else { &colors.fleece };
+                transform.scale =
+                    Vec3::new(0.34, 0.28, 0.52).lerp(Vec3::new(0.42, 0.38, 0.62), grown);
+
+                let color = if grown < 0.5 {
+                    &colors.shorn
+                } else {
+                    &colors.fleece
+                };
                 if let Some(mut material) = material
                     && material.0 != *color
                 {

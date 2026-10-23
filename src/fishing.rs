@@ -1,4 +1,4 @@
-//! Finite coastal catch, physical salting and preserved fish for the existing home.
+//! Bounded catch per coastal round, physical salting and preserved fish for the home.
 use crate::{
     simulation::{STOCKPILE, Settlement, Worker},
     trade::SaltLocation,

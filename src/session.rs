@@ -72,6 +72,11 @@ impl Snapshot {
     fn validate(&self) -> Result<(), String> {
         let s = &self.settlement;
         if !self.resident_motion.valid(self.seconds)
+            || !s.shore_cycles.valid(s.calendar.year)
+            || s.flock
+                .regrowth_remaining
+                .iter()
+                .any(|v| !v.is_finite() || !(0.0..=crate::calendar::YEAR_SECONDS).contains(v))
             || !s.voyage.valid(&s.flock.wool)
             || !self.daylight.hour.is_finite()
             || !(0.0..24.0).contains(&self.daylight.hour)
@@ -373,6 +378,53 @@ mod tests {
     }
     fn bytes(app: &mut App) -> Vec<u8> {
         Snapshot::capture(app.world_mut()).encode().unwrap()
+    }
+    #[test]
+    fn renewed_round_saves_real_cargo_and_regrowth_without_losing_history() {
+        use crate::{
+            fishing::FishLocation, livestock::WoolLocation, shipping::VoyagePhase,
+            trade::SaltLocation,
+        };
+        let mut s = Settlement::default();
+        s.calendar.advance(crate::calendar::YEAR_SECONDS);
+        s.voyage.phase = VoyagePhase::Completed;
+        s.flock.wool.fill(WoolLocation::Exported);
+        s.barter.salt.fill(SaltLocation::Consumed);
+        s.fishery.fish.fill(FishLocation::Eaten(1));
+        assert_eq!(s.request_shipment(), Ok(true));
+        let mut worker = Worker::default();
+        for _ in 0..1000 {
+            worker.advance(0.25, &mut s);
+            if worker.carrying_wool.is_some() {
+                break;
+            }
+        }
+        assert!(worker.carrying_wool.is_some());
+        let snapshot = Snapshot {
+            settlement: s,
+            workers: vec![worker],
+            seconds: 300.0,
+            daylight: Daylight::default(),
+            resident_motion: default(),
+        };
+        let encoded = snapshot.encode().unwrap();
+        let restored = Snapshot::decode(&encoded).unwrap();
+        assert_eq!(encoded, restored.encode().unwrap());
+        assert_eq!(restored.settlement.shore_cycles.retired_rounds, 1);
+        assert!(
+            restored
+                .settlement
+                .flock
+                .regrowth_remaining
+                .iter()
+                .any(|&v| v > 0.0)
+        );
+        let mut bad = Snapshot::decode(&encoded).unwrap();
+        bad.settlement.flock.regrowth_remaining[0] = -1.0;
+        assert!(bad.encode().is_err());
+        bad.settlement.flock.regrowth_remaining[0] = 0.0;
+        bad.settlement.shore_cycles.last_started_year = u64::MAX;
+        assert!(bad.encode().is_err());
     }
     #[test]
     fn snapshot_restores_mid_blend_and_accepts_legacy_payload_without_motion() {

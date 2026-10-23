@@ -21,6 +21,7 @@ mod rendering;
 mod resident;
 mod session;
 mod shipping;
+mod shore_cycles;
 mod simulation;
 mod surfaces;
 mod terrain_material;

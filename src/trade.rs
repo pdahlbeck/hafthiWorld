@@ -1,4 +1,4 @@
-//! One finite shore offer: physically deliver wool, then carry paid salt home.
+//! A finite offer per coastal round: deliver wool, then carry paid salt home.
 use crate::{
     livestock::WoolLocation,
     simulation::{STOCKPILE, Settlement, Worker},

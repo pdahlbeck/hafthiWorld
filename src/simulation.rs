@@ -73,6 +73,8 @@ pub struct Settlement {
     pub calendar: Calendar,
     pub fishery: Fishery,
     #[serde(default)]
+    pub shore_cycles: crate::shore_cycles::ShoreCycles,
+    #[serde(default)]
     pub voyage: crate::shipping::Voyage,
     pub helper_requested: bool,
     pub coastal_assigned: bool,
@@ -90,6 +92,7 @@ impl Default for Settlement {
             barter: Barter::default(),
             calendar: Calendar::default(),
             fishery: Fishery::default(),
+            shore_cycles: crate::shore_cycles::ShoreCycles::default(),
             voyage: crate::shipping::Voyage::default(),
             helper_requested: false,
             coastal_assigned: false,
