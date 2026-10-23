@@ -1,0 +1,40 @@
+{
+  "source_commit": "0943055db6ec570bcef9f2c8b41c9e5467c808f9",
+  "height": 1.7,
+  "joints": 80,
+  "clips": [
+    {
+      "name": "Idle",
+      "duration": 2.7333333333333334,
+      "source": "m_idle_breathe_01.max.fbx",
+      "source_fps": 30.0,
+      "walk_speed": 0.0
+    },
+    {
+      "name": "Walk",
+      "duration": 1.2,
+      "source": "m_walk_neutral_01.max.fbx",
+      "source_fps": 30.0,
+      "walk_speed": 0.9406249225489205
+    },
+    {
+      "name": "Work",
+      "duration": 11.633333333333333,
+      "source": "m_work_mid.max.fbx",
+      "source_fps": 30.0,
+      "walk_speed": 0.0
+    },
+    {
+      "name": "Table",
+      "duration": 11.3,
+      "source": "m_work_table.max.fbx",
+      "source_fps": 30.0,
+      "walk_speed": 0.0
+    }
+  ],
+  "walk_source_speed": 0.9406249225489205,
+  "foot_height": {
+    "L": 0.12534762918949127,
+    "R": 0.12534773349761963
+  }
+}

@@ -1,9 +1,24 @@
-# Coastal art study — original project assets
+# Coastal art assets
+
+## Current runtime character
+
+`models/textured-resident.glb` replaces the previous runtime character. It combines
+project-authored costume with MIT Rocketbox head/neck/hair/hands, embedded skin
+maps, an 80-joint rig and four retargeted clips. `models/resident-motion.json`
+records source motion speed and foot rest heights used by the renderer. Exact
+sources, licensing, editable output and reproduction commands are documented in
+[the current character pipeline](../docs/textured-residents.md). All runtime art
+is embedded via `src/art_assets.rs`.
+
+## Earlier donor study and environment
+
+The descriptions below refer to the retained `coastal-resident.glb` and its
+editable costume donor, not the currently embedded runtime character.
 
 The garment, rig, surface maps and environment are authored for hafthiWorld. The
 head and hands adapt MakeHuman’s explicitly CC0 anatomical base (source, pinned revision and
-complete license in `tools/art/reference/`). No proprietary game meshes, scans,
-photographs or third-party texture packs are included.
+complete license in `tools/art/reference/`). The earlier donor uses no third-party photographic skin maps; the current
+runtime character uses the licensed Rocketbox maps described above.
 
 - `models/coastal-resident.glb`: one adult coastal resident, 15 deform joints,
   weighted tunic/sleeves/trousers, boots, neck/head, facial landmarks, hair,

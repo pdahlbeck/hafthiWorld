@@ -3,6 +3,7 @@ mod art;
 mod art_assets;
 mod calendar;
 mod camera;
+mod character_motion;
 mod cinematic;
 mod coast;
 mod farming;
