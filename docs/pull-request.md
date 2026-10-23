@@ -1,19 +1,17 @@
-The previous coastal pass was rejected visually: uniform fill lighting, flat roof surfaces, triangular pine fans and speckled terrain still read as placeholder art. This revision uses Bevy 0.20's physical atmosphere and sky-derived environment lighting in High, with photographic exposure, ACES, temporal shadow filtering and contact shadows. The house gets original reed texture/micro-normals and geometric roof detail; pines use original alpha-cut branch art; terrain gets broader variation and water receives sky environment lighting.
+The user’s close-up exposed specific character defects: mitten hands, pale featureless skin, a cap-like hair shell, disconnected sleeve/body forms, white trousers protruding through the tunic at the hips, and rigid boot cuffs. This revision rebuilds the resident mesh and its materials rather than adjusting scene lighting again.
 
-This is a visual review, **not a claim of parity with the supplied finished-village reference**. Character art, architecture, stonework and vegetation still need substantial authored work. A Bevy fork is not included: the required sky/IBL/shadow features are already available upstream. No engine migration, new residents, invented production chains or changed inventory rules.
+The character now has anatomical hands/head from the same pinned CC0 MakeHuman reference, a continuous lower neck fitted under the shirt, a fused single-component tunic with transferred/blended weights, trouser tops hidden inside the garment, boot shafts blended to the shin, scalp-fitted hair/strand geometry and authored skin colors. Garment tinting identifies the glTF material by name so future skin/hair textures cannot inherit shirt tint. The first-person entry frames the founder in a fresh session.
 
-- Keeps the shared persistent simulation, first-person height/navigation and existing save format. New lighting/exposure derives from the saved hour, with the physical sun crossing below the horizon at night and a weak moonlight/readability floor.
-- Low keeps the lighter lighting pipeline and shares the revised art. Alpha-weighted color mip filtering prevents transparent black from darkening needle edges.
-- Generated material PNGs are unchanged original outputs; separate analytic reed normals and full provenance/prompts are checked in. Assets remain embedded; no runtime downloads or new Rust dependencies.
+Keeps the existing 15-joint rig, real resident/visitor identities, saved-clock/task/cargo poses and save format. Material batching reduces 29 primitives to 9; exported vertices increase from 17,212 to 61,117, so no equal-cost or native Metal performance claim is made. Source, provenance and reproduction commands are checked in.
 
-Validation: `cargo fmt --check`, `cargo check --locked`, all **97 tests**, Clippy with `-D warnings`, debug/release builds, original glTF validator. Tests include solar horizon/exposure restoration, transparent mip colors and mesh normals/winding, plus the existing shared economy/save suite. Both quality settings and camera modes are checked on software Vulkan. No macOS Metal performance claim or new benchmark matrix.
+**This corrects model defects; it does not establish finished-game/reference quality or claim a landscape improvement.** Skin detail is vertex-authored, not a scanned skin texture. Faces/fingers are not animated; distinct people/costumes and polished motion remain unfinished. No engine fork or new gameplay roles.
 
-See [renderer notes](https://github.com/pdahlbeck/hafthiWorld/blob/codex/physical-coastal-lighting/docs/physical-renderer.md). Continues #1. Based on the open coastal renderer PR #23.
+Validation: fmt/check, all **97 Rust tests**, Clippy `-D warnings`, debug/release builds. GLB validation checks joints, normalized weights/normals, embedded textures and skin color preservation. Blender source validation checks that the tunic has one connected component and that 66 hidden upper-trouser vertices are inside the actual cloth surface in rest pose. This catches the reported white hip triangles; it does not promise collision-free cloth in all animation. Actual High/Low game screenshots and work/save restoration checks complement the automated checks.
 
-Raw game captures, using an existing saved voyage and frozen 16:00 light:
+See [model review](https://github.com/pdahlbeck/hafthiWorld/blob/codex/resident-anatomy-and-skinning/docs/resident-correction.md). Continues #1, based on open PR #24.
 
-![High coastal view](https://github.com/pdahlbeck/hafthiWorld/blob/codex/physical-coastal-lighting/docs/screenshots/physical-coast-high.png)
+![Actual High close-up](https://github.com/pdahlbeck/hafthiWorld/blob/codex/resident-anatomy-and-skinning/docs/screenshots/resident-correction-front-high.png)
 
-![High first person](https://github.com/pdahlbeck/hafthiWorld/blob/codex/physical-coastal-lighting/docs/screenshots/physical-first-person-high.png)
+[Uncropped functional capture of a restored wool-carry pose](https://github.com/pdahlbeck/hafthiWorld/blob/codex/resident-anatomy-and-skinning/docs/screenshots/resident-correction-loaded-high.png)
 
-![Low coastal view](https://github.com/pdahlbeck/hafthiWorld/blob/codex/physical-coastal-lighting/docs/screenshots/physical-coast-low.png)
+![Actual Low close-up](https://github.com/pdahlbeck/hafthiWorld/blob/codex/resident-anatomy-and-skinning/docs/screenshots/resident-correction-front-low.png)

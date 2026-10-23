@@ -49,9 +49,9 @@ impl Default for CameraRig {
                 distance: 32.0,
                 focus: Vec3::new(0., 0., 1.5),
             },
-            position: Vec2::new(-4.0, 4.8),
+            position: Vec2::new(-2.5, 6.5),
             yaw: 0.0,
-            pitch: -0.10,
+            pitch: -0.25,
         }
     }
 }

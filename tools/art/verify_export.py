@@ -27,5 +27,20 @@ for mesh in d['meshes']:
         for weights in values(a['WEIGHTS_0']): assert abs(sum(weights)-1)<.001
         for joint in values(a['JOINTS_0']): assert all(0<=x<len(joints) for x in joint)
         vertices+=d['accessors'][a['POSITION']]['count']
+# The face/neck/hands now carry authored linear skin colors. Losing COLOR_0
+# would silently turn this material white (the failure seen in close-up review).
+skin_index=next(i for i,m in enumerate(d['materials']) if m['name']=='Warm matte skin')
+for mesh in d['meshes']:
+    for primitive in mesh['primitives']:
+        if primitive.get('material')!=skin_index:continue
+        a=primitive['attributes'];assert 'COLOR_0' in a, 'skin color attribute lost'
+        accessor=d['accessors'][a['COLOR_0']]
+        colors=list(values(a['COLOR_0']))
+        scale={5121:255,5123:65535}.get(accessor['componentType'],1) if accessor.get('normalized') else 1
+        colors=[[c/scale for c in color] for color in colors]
+        assert all(all(0<=c<=1 for c in color) for color in colors)
+        mean=[sum(c[i] for c in colors)/len(colors) for i in range(3)]
+        assert .08<mean[0]<.5 and mean[0]>mean[1]>mean[2], f'washed out skin {mean}'
+        assert max(c[0] for c in colors)-min(c[0] for c in colors)>.03, 'skin variation lost'
 for image in d['images']:assert 'bufferView' in image and 'uri' not in image
-print(f'Validated {vertices} vertices, {len(joints)} joints, normalized weights/normals and embedded textures')
+print(f'Validated {vertices} vertices, {len(joints)} joints, normalized weights/normals, authored skin colors and embedded textures')

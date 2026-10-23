@@ -2,6 +2,15 @@
 
 Rust + Bevy 0.20 settlement simulation inspired by Viking Age Gotland. The second scoped milestone from [issue #1](https://github.com/pdahlbeck/hafthiWorld/issues/1) adds a playable resource chain: **order tree felling → carry logs to storage → carry stored timber to a construction site → finish a timber rack**. Strategy and first person observe the same running ECS world. Milestone 3 adds an original procedural coastal visual pass and portable performance instrumentation. The following small slices add a crop/seed loop, a two-sheep fleece chain and a first owned household pantry and a finite shore barter offer, using the same worker and storage. The founder, optional coastal helper, three finite trees and material-backed timber rack remain the same shared simulation in both views. A fresh session is solo; **N** invites the second resident and assigns coastal work, as described below. Earlier smoke tests assume N is omitted.
 
+## Resident mesh review
+
+The rejected close-up prompted a character rebuild: anatomical hands, continuous
+neck/head geometry, one connected tunic, hidden trouser tops, blended boot shafts,
+scalp-fitted hair and authored skin colors. **Tab** now enters facing the founder
+in a fresh session; F4 hides the HUD. See [model review and limits](docs/resident-correction.md).
+This is a correction of specific model defects; the landscape and finished-game
+visual target remain unresolved.
+
 ## Current graphics review
 
 High now uses Bevy's physical atmosphere, sky-driven environment illumination,
@@ -94,7 +103,7 @@ The timber chain has one founder by default, three fixed trees, one timber mater
 - `session.rs`: versioned full simulation snapshots, checked cargo/roster, atomic local save replacement, restore and simulation pause. Camera poses stay live.
 - `main.rs`: plugin composition and window setup.
 
-`FixedUpdate` advances material flow regardless of camera mode. `Update` presents the current state. Environment geometry and clothing are authored for this project; the founder’s head adapts a documented CC0 anatomical base (see `assets/README.md`). Historical layouts, costumes and logistics timing are artistic/technical interpretations, not archaeological claims. Several small interactive props remain simplified prototypes.
+`FixedUpdate` advances material flow regardless of camera mode. `Update` presents the current state. Environment geometry and clothing are authored for this project; the residents’ head and hands adapt a documented CC0 anatomical base (see `assets/README.md`). Historical layouts, costumes and logistics timing are artistic/technical interpretations, not archaeological claims. Several small interactive props remain simplified prototypes.
 
 ## Validation
 
