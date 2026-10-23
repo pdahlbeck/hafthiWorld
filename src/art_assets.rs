@@ -27,4 +27,7 @@ pub fn register(app: &mut App) {
     pack!("shaders/coastal_water.wesl");
     pack!("shaders/coastal_ground.wesl");
     pack!("materials/meadow-color.png");
+    pack!("materials/thatch-color.png");
+    pack!("materials/thatch-normal.png");
+    pack!("materials/pine-bough.png");
 }

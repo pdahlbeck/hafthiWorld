@@ -115,15 +115,29 @@ fn setup(
         &server,
     );
     spawn_grass(&mut commands, &mut meshes, &mut materials, *quality);
-    commands.spawn((
-        DirectionalLight {
-            illuminance: 11_000.0,
-            shadow_maps_enabled: quality.shadows(),
-            ..default()
-        },
-        Transform::default(),
-        Sun,
-    ));
+    let sun = commands
+        .spawn((
+            DirectionalLight {
+                illuminance: 11_000.0,
+                shadow_maps_enabled: quality.shadows(),
+                contact_shadows_enabled: *quality == VisualQuality::High,
+                ..default()
+            },
+            Transform::default(),
+            Sun,
+        ))
+        .id();
+    if *quality == VisualQuality::High {
+        commands.entity(sun).insert((
+            bevy::light::SunDisk::EARTH,
+            bevy::light::CascadeShadowConfigBuilder {
+                maximum_distance: 140.0,
+                first_cascade_far_bound: 12.0,
+                ..default()
+            }
+            .build(),
+        ));
+    }
     commands.insert_resource(GlobalAmbientLight {
         color: Color::srgb(0.73, 0.82, 0.94),
         brightness: 260.0,
@@ -134,7 +148,7 @@ fn spawn_farmstead(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
-    quality: VisualQuality,
+    _quality: VisualQuality,
     server: &AssetServer,
 ) {
     let timber = materials.add(StandardMaterial {
@@ -148,10 +162,11 @@ fn spawn_farmstead(
         ..crate::coast::material(server, "wood")
     });
     let thatch = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.69, 0.66, 0.57),
+        base_color: Color::srgb(0.92, 0.92, 0.90),
+        base_color_texture: Some(crate::coast::texture(server, "thatch-color", true)),
+        normal_map_texture: Some(crate::coast::texture(server, "thatch-normal", false)),
         cull_mode: None,
         double_sided: true,
-        diffuse_transmission: 0.35,
         perceptual_roughness: 1.0,
         ..default()
     });
@@ -231,28 +246,25 @@ fn spawn_farmstead(
         MeshMaterial3d(thatch.clone()),
         Transform::default(),
     ));
-    let fringe = meshes.add(
-        Capsule3d::new(0.012, 0.19)
-            .mesh()
-            .longitudes(8)
-            .latitudes(4),
-    );
-    let fringe_count = if quality == VisualQuality::High {
-        70
-    } else {
-        35
-    };
-    for side in [-1., 1.] {
-        for i in 0..fringe_count {
-            let z = -2.78 + i as f32 * 5.56 / (fringe_count - 1) as f32;
-            commands.spawn((
-                Mesh3d(fringe.clone()),
-                MeshMaterial3d(thatch.clone()),
-                Transform::from_xyz(2. + side * 2.12, 2.23 - 0.04 * (z / 2.85).powi(2), z)
-                    .with_rotation(Quat::from_rotation_z(side * 0.16))
-                    .with_scale(Vec3::new(1., 0.7 + noise(i + 650) * 0.6, 1.)),
-            ));
-        }
+    commands.spawn((
+        Mesh3d(meshes.add(crate::art::thatch_ends())),
+        MeshMaterial3d(thatch.clone()),
+        Transform::from_xyz(2.0, 0.0, 0.0),
+    ));
+    // Bent ridge spars and roof battens cast real shadows rather than painted bands.
+    for i in 0..7 {
+        let z = -2.65 + i as f32 * 0.88;
+        let path: Vec<_> = (0..25)
+            .map(|j| {
+                let x = -2.10 + j as f32 * 4.20 / 24.0;
+                Vec3::new(x + 2.0, crate::art::roof_height(x, z) + 0.08, z)
+            })
+            .collect();
+        commands.spawn((
+            Mesh3d(meshes.add(crate::art::tube(&path, 0.032))),
+            MeshMaterial3d(timber.clone()),
+            Transform::default(),
+        ));
     }
     let post = meshes.add(Cylinder::new(0.085, 1.7).mesh().resolution(12));
     for x in [1.52, 2.48] {
@@ -312,7 +324,9 @@ fn spawn_pines(
     });
     // Shared pine positions also define trunk clearance for first-person walking.
     let foliage = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.24, 0.34, 0.25),
+        base_color: Color::srgb(0.9, 0.94, 0.85),
+        base_color_texture: Some(crate::coast::texture(server, "pine-bough", true)),
+        alpha_mode: AlphaMode::Mask(0.35),
         cull_mode: None,
         double_sided: true,
         diffuse_transmission: 0.35,
@@ -320,7 +334,7 @@ fn spawn_pines(
         ..default()
     });
     let pine = meshes.add(crate::art::foliage());
-    let trunk = meshes.add(Cone::new(0.16, 3.1));
+    let trunk = meshes.add(Cone::new(0.16, 5.4));
     let branch = meshes.add(crate::art::tube(
         &[
             Vec3::ZERO,
@@ -334,11 +348,11 @@ fn spawn_pines(
         commands.spawn((
             Mesh3d(trunk.clone()),
             MeshMaterial3d(timber.clone()),
-            Transform::from_xyz(x, 1.75, z),
+            Transform::from_xyz(x, 2.90, z),
         ));
         for layer in 0..5 {
-            let h = 1.20 + layer as f32 * 0.48;
-            let width = (0.95 - layer as f32 * 0.145) * (0.90 + noise(i + 300) * 0.2);
+            let h = 2.75 + layer as f32 * 0.52;
+            let width = (1.35 - layer as f32 * 0.20) * (0.90 + noise(i + 300) * 0.2);
             let branches = if quality == VisualQuality::High { 5 } else { 3 };
             for bough in 0..branches {
                 let angle = bough as f32 * std::f32::consts::TAU / branches as f32
@@ -424,15 +438,26 @@ fn sun_at(hour: f32) -> (Quat, f32) {
         700.0 + elevation.max(0.0) * 13_000.0,
     )
 }
+#[derive(bevy::ecs::system::SystemParam)]
+struct DaylightEnvironment<'w, 's> {
+    ambient: ResMut<'w, GlobalAmbientLight>,
+    sky: ResMut<'w, ClearColor>,
+    quality: Res<'w, VisualQuality>,
+    fog: Query<'w, 's, &'static mut DistanceFog>,
+}
 fn daylight(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
     mut day: ResMut<Daylight>,
     mut suns: Query<(&mut Transform, &mut DirectionalLight), With<Sun>>,
-    mut ambient: ResMut<GlobalAmbientLight>,
-    mut sky: ResMut<ClearColor>,
-    mut fog: Query<&mut DistanceFog>,
+    environment: DaylightEnvironment,
 ) {
+    let DaylightEnvironment {
+        mut ambient,
+        mut sky,
+        quality,
+        mut fog,
+    } = environment;
     if keys.just_pressed(KeyCode::KeyT) {
         day.running = !day.running;
     }
@@ -449,12 +474,27 @@ fn daylight(
     for mut fog in &mut fog {
         fog.color = sky.0;
     }
-    ambient.brightness = 60.0 + daylight * 200.0;
+    let physical = *quality == VisualQuality::High;
+    ambient.brightness = if physical {
+        0.0
+    } else {
+        60.0 + daylight * 200.0
+    };
     let (rotation, illuminance) = sun_at(day.hour);
     for (mut transform, mut light) in &mut suns {
-        transform.rotation = rotation;
-        light.illuminance = illuminance;
-        light.color = if (6.0..9.0).contains(&day.hour) || (16.0..20.0).contains(&day.hour) {
+        transform.rotation = if physical {
+            crate::rendering::solar_frame(day.hour).rotation
+        } else {
+            rotation
+        };
+        light.illuminance = if physical {
+            bevy::light::light_consts::lux::RAW_SUNLIGHT
+        } else {
+            illuminance
+        };
+        light.color = if physical {
+            Color::WHITE
+        } else if (6.0..9.0).contains(&day.hour) || (16.0..20.0).contains(&day.hour) {
             Color::srgb(1.0, 0.90, 0.77)
         } else {
             Color::srgb(0.91, 0.94, 1.0)

@@ -45,3 +45,11 @@ See `docs/rendering-target.md` for the shader and terrain assumptions.
 `materials/meadow-color.png` is an unchanged original ImageGen albedo study,
 blended into the soil by `shaders/coastal_ground.wesl`. Its generation prompt,
 size and limits are recorded in `tools/art/meadow-prompt.md`. It is not a scan.
+
+### Physical-lighting material review
+
+`materials/thatch-color.png` and `materials/pine-bough.png` are unchanged original
+ImageGen outputs for this project (2026-10-23). Full prompts and limits are in
+`tools/art/coastal-material-prompts.md`. The reed micro-normal is separately
+procedural and reproducible with `python3 tools/art/bake_reed_normal.py`.
+These are illustrative textures, not calibrated scans or borrowed game assets.

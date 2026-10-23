@@ -57,6 +57,7 @@ struct StatusText;
 struct OrderPanel;
 fn setup(
     mut commands: Commands,
+    server: Option<Res<AssetServer>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
@@ -111,7 +112,11 @@ fn setup(
             });
         });
     let leaf = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.25, 0.36, 0.25),
+        base_color: Color::srgb(0.9, 0.94, 0.85),
+        base_color_texture: server
+            .as_ref()
+            .map(|server| crate::coast::texture(server, "pine-bough", true)),
+        alpha_mode: AlphaMode::Mask(0.35),
         cull_mode: None,
         double_sided: true,
         diffuse_transmission: 0.35,

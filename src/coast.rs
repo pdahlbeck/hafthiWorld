@@ -7,28 +7,26 @@ use bevy::{
 };
 
 pub fn material(server: &AssetServer, kind: &str) -> StandardMaterial {
-    let load = |suffix: &str, srgb| {
-        server
-            .load_builder()
-            .with_settings(move |s: &mut ImageLoaderSettings| {
-                s.is_srgb = srgb;
-                s.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
-                    address_mode_u: ImageAddressMode::Repeat,
-                    address_mode_v: ImageAddressMode::Repeat,
-                    ..ImageSamplerDescriptor::linear()
-                });
-            })
-            .load(format!(
-                "embedded://hafthi_world/materials/{kind}-{suffix}.png"
-            ))
-    };
     StandardMaterial {
-        base_color_texture: Some(load("color", true)),
-        normal_map_texture: Some(load("normal", false)),
-        metallic_roughness_texture: Some(load("orm", false)),
+        base_color_texture: Some(texture(server, &format!("{kind}-color"), true)),
+        normal_map_texture: Some(texture(server, &format!("{kind}-normal"), false)),
+        metallic_roughness_texture: Some(texture(server, &format!("{kind}-orm"), false)),
         perceptual_roughness: 1.,
         ..default()
     }
+}
+pub fn texture(server: &AssetServer, name: &str, srgb: bool) -> Handle<Image> {
+    server
+        .load_builder()
+        .with_settings(move |s: &mut ImageLoaderSettings| {
+            s.is_srgb = srgb;
+            s.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+                address_mode_u: ImageAddressMode::Repeat,
+                address_mode_v: ImageAddressMode::Repeat,
+                ..ImageSamplerDescriptor::linear()
+            });
+        })
+        .load(format!("embedded://hafthi_world/materials/{name}.png"))
 }
 fn hash(i: u32) -> f32 {
     crate::world::noise(i)

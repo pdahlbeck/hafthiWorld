@@ -353,6 +353,37 @@ pub fn spawn(
         }
         crown_variants.push(meshes.add(merged.expect("crown lobes")));
     }
+    let pine_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.9, 0.94, 0.85),
+        base_color_texture: Some(coast::texture(server, "pine-bough", true)),
+        alpha_mode: AlphaMode::Mask(0.35),
+        cull_mode: None,
+        double_sided: true,
+        diffuse_transmission: 0.25,
+        perceptual_roughness: 1.0,
+        ..default()
+    });
+    let pine_source = crate::art::foliage();
+    let mut pine_crowns = Vec::new();
+    for variant in 0..5 {
+        let mut merged = None;
+        for b in 0..18 {
+            let id = variant * 100 + b;
+            let angle = b as f32 * 2.39996;
+            let h = 0.55 + noise(id + 32000) * 0.40;
+            let width = 0.15 + (1.0 - h) * 0.30;
+            let p = Vec3::new(angle.cos() * 0.10, h, angle.sin() * 0.10);
+            merge_mesh(
+                &mut merged,
+                pine_source.clone().transformed_by(
+                    Transform::from_translation(p)
+                        .with_rotation(Quat::from_rotation_y(angle))
+                        .with_scale(Vec3::new(width, 0.18, width)),
+                ),
+            );
+        }
+        pine_crowns.push(meshes.add(merged.expect("pine branch crown")));
+    }
     for i in 0..180 {
         let (p, h) = tree(i);
         let base = height(p);
@@ -366,8 +397,16 @@ pub fn spawn(
             )),
         ));
         commands.spawn((
-            Mesh3d(crown_variants[i as usize % 5].clone()),
-            MeshMaterial3d(leaves.clone()),
+            Mesh3d(if i % 3 == 0 {
+                crown_variants[i as usize % 5].clone()
+            } else {
+                pine_crowns[i as usize % 5].clone()
+            }),
+            MeshMaterial3d(if i % 3 == 0 {
+                leaves.clone()
+            } else {
+                pine_material.clone()
+            }),
             Transform::from_xyz(p.x, base, p.y).with_scale(Vec3::splat(h)),
         ));
     }

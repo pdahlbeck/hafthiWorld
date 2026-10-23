@@ -16,6 +16,7 @@ mod motion;
 mod orders;
 mod performance;
 mod presentation;
+mod rendering;
 mod resident;
 mod session;
 mod shipping;
@@ -81,6 +82,7 @@ fn main() -> AppExit {
         ))
         .add_plugins((
             resident::ResidentPlugin,
+            rendering::CoastalRendererPlugin,
             water::WaterPlugin,
             cinematic::CinematicPlugin,
             surfaces::SurfacePlugin,
