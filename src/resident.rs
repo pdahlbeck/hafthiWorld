@@ -81,7 +81,10 @@ fn tint_clothing(
     children: Query<&Children>,
     parents: Query<&ChildOf>,
     owners: Query<&WorkerVisual>,
-    mut parts: Query<&mut MeshMaterial3d<StandardMaterial>>,
+    mut parts: Query<(
+        &mut MeshMaterial3d<StandardMaterial>,
+        &bevy::gltf::GltfMaterialName,
+    )>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let owner = parents
@@ -90,18 +93,21 @@ fn tint_clothing(
         .and_then(|p| owners.get(p.parent()).ok())
         .map_or(0, |v| v.0);
     let tint = match owner {
-        1 => Color::srgb(0.65, 0.78, 1.05),
-        2 => Color::srgb(0.9, 1., 0.84),
-        _ => Color::srgb(1.05, 0.85, 0.7),
+        1 => Color::srgb(0.45, 0.58, 0.70),
+        2 => Color::srgb(0.58, 0.64, 0.48),
+        _ => Color::srgb(0.68, 0.54, 0.40),
     };
     let mut copies: std::collections::HashMap<
         bevy::asset::AssetId<StandardMaterial>,
         Handle<StandardMaterial>,
     > = std::collections::HashMap::new();
     for entity in children.iter_descendants(event.entity) {
-        let Ok(mut part) = parts.get_mut(entity) else {
+        let Ok((mut part, name)) = parts.get_mut(entity) else {
             continue;
         };
+        if name.0 != "Undyed sage wool" {
+            continue;
+        }
         if let Some(handle) = copies.get(&part.0.id()) {
             part.0 = handle.clone();
             continue;
@@ -109,7 +115,7 @@ fn tint_clothing(
         let Some(source) = materials.get(&part.0) else {
             continue;
         };
-        // Only the wool garment has a base-color map; keep skin, linen, leather and hair intact.
+        // Identify the garment explicitly: future skin/hair textures must never get clothing tint.
         if source.base_color_texture.is_none() {
             continue;
         }

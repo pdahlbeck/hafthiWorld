@@ -11,3 +11,13 @@ Upstream file header explicitly releases this asset under CC0 in September 2020.
 Copyright holders named there: Data Collection AB, Joel Palmius, Jonas Hauquier.
 The complete upstream asset license is included as `CC0-1.0.md`, retrieved from
 `LICENSE.ASSETS.md` at the same repository. No scans or game-proprietary models.
+
+## Full anatomical reference for the resident correction
+
+`makehuman-base.obj` is the complete asset from the **same pinned source and CC0
+license above**. It is kept as an editable anatomical reference. The builder
+extracts only the clothed character's head/neck and hands, adapts their positions,
+adds original skin colors/hair/costume and binds them to the project's existing
+15-joint rig. The full unclothed reference body and helper meshes are not exported
+to the game. The earlier head excerpt remains for provenance of the preceding
+study; the new builder reads `makehuman-base.obj`.
