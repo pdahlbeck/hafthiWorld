@@ -509,3 +509,8 @@ skin SSS or new behavior/navigation AI. All people still share one face. See
 
 Run with `cargo run --release --locked -- --quality high` (the `--` before game
 options is required). Tab enters first person; Space pauses; F4 hides the HUD.
+
+The resident proportion correction shortens the exposed neck by 4 cm while
+preserving facial shape, eyes/hair alignment and the neck/collar connection.
+A slightly fuller tunic waist softens the pinched torso silhouette. See the
+[matched asset portraits and limits](docs/textured-residents.md#proportion-correction).

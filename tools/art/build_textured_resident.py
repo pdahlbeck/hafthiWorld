@@ -84,6 +84,13 @@ for ob in [donor['Wool tunic'],donor['Linen neckline'],donor['Belt']]:
             # stride. Compress upper rings rather than collapsing them to a plane.
             p.z=.51+(p.z-.51)*(.085/.18)
             assert p.z<=.6001,(ob.name,v.index,p.z)
+        # A loose woven tunic should not cinch into an hourglass between ribs
+        # and belt. Adjust the donor surface before retargeting; preserve sleeve
+        # and cuff geometry, garment thickness and its carefully fitted hands.
+        if ob.name in ('Wool tunic','Belt') and .80 < p.z < 1.12 and abs(p.x)<.19:
+            fullness=max(0,1-abs(p.z-.96)/.16)
+            p.x*=1+.08*fullness
+            p.y*=1+.06*fullness
         total=sum(original.values())
         assert total>.99,(ob.name,v.index,total)
         for name,weight in original.items():
@@ -107,10 +114,20 @@ floor=min(p.z for ob,points,w in costume_data for p in points)
 top=max(p.z for p in head_positions)
 normal_scale=1.70/(top-floor)
 normal=Matrix.Diagonal((normal_scale,normal_scale,normal_scale,1))@Matrix.Translation((0,0,-floor))
+# Lower the complete skull, eyes and hair rigidly: no facial scaling. Keep
+# shoulders/arms in their original rest positions and shorten only the neck.
+HEAD_DROP=.04
+head_bones={'Bip01 Head'}
+for name in source_parents:
+    parent=source_parents[name]
+    while parent:
+        if parent=='Bip01 Head':head_bones.add(name);break
+        parent=source_parents[parent]
 rest={}
 for name,matrix in source_bones.items():
     transformed=normal@matrix
     clean=transformed.to_quaternion().to_matrix().to_4x4();clean.translation=transformed.translation
+    if name in head_bones:clean.translation.z-=HEAD_DROP
     rest[name]=clean
 # Output rig has identity object transforms and metre-scale bone translations.
 armature=bpy.data.armatures.new('Coastal motion skeleton');rig=bpy.data.objects.new('CoastalRig',armature)
@@ -165,7 +182,12 @@ def bind(ob,weights):
     output.append(ob)
 # Preserve source UV loops and material partitions exactly for the licensed skin.
 ids=sorted({v for p in faces for v in p.vertices});lookup={v:i for i,v in enumerate(ids)}
-verts=[tuple(normal@(source_mesh.matrix_world@source_mesh.data.vertices[v].co)) for v in ids]
+head_ids={v for p in faces if p.material_index in (1,2) for v in p.vertices}
+verts=[]
+for v in ids:
+    point=normal@(source_mesh.matrix_world@source_mesh.data.vertices[v].co)
+    if v in head_ids:point.z-=HEAD_DROP
+    verts.append(tuple(point))
 mesh=bpy.data.meshes.new('Textured anatomy');mesh.from_pydata(verts,[],[tuple(lookup[v] for v in p.vertices) for p in faces]);mesh.update()
 ob=bpy.data.objects.new('Textured anatomy',mesh);bpy.context.collection.objects.link(ob)
 for m in [body,head,hair]:mesh.materials.append(m)
@@ -280,6 +302,6 @@ for ob in output:ob.select_set(True)
 bpy.context.view_layer.objects.active=rig
 bpy.ops.wm.save_as_mainfile(filepath=str(ROOT/'tools/art/textured-resident.blend'),compress=True)
 bpy.ops.export_scene.gltf(filepath=str(ROOT/'assets/models/textured-resident.glb'),export_format='GLB',use_selection=True,export_animations=True,export_animation_mode='ACTIONS',export_frame_range=False,export_skins=True,export_yup=True,export_materials='EXPORT',export_bake_animation=True,export_copyright=(ROOT/'assets/licenses/Microsoft-Rocketbox-MIT.md').read_text())
-manifest={'source_commit':'0943055db6ec570bcef9f2c8b41c9e5467c808f9','height':1.70,'joints':len(rest),'clips':clips,'walk_source_speed':clips[1]['walk_speed'],'foot_height':{side:rest['Bip01 '+side+' Foot'].translation.z for side in ['L','R']}}
+manifest={'source_commit':'0943055db6ec570bcef9f2c8b41c9e5467c808f9','height':1.70-HEAD_DROP,'joints':len(rest),'clips':clips,'walk_source_speed':clips[1]['walk_speed'],'foot_height':{side:rest['Bip01 '+side+' Foot'].translation.z for side in ['L','R']}}
 (ROOT/'assets/models/resident-motion.json').write_text(json.dumps(manifest,indent=2)+'\n')
 print('EXPORTED TEXTURED RESIDENT',manifest)

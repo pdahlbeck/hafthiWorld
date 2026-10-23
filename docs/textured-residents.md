@@ -135,3 +135,21 @@ The independent GLB check ray-tests every lower neck rim vertex against the
 actual skinned tunic, requiring it to remain inside.
 It covers rest pose, 36 clip poses and 18 crossfades; the prior asset fails this
 regression check. Front game captures have been refreshed after the correction.
+
+## Proportion correction
+
+The long exposed neck is shortened by lowering the skull, eyes, hair and all
+head-descendant rest joints together by 4 cm. Facial geometry and UVs retain
+their original scale. The existing continuous neck rim remains tucked inside
+the tunic and is checked in animated poses. The finished character is 1.66 m
+rather than 1.70 m; the shoulders, hands, feet and cargo sockets retain their
+positions. The tunic and belt gain a small, smoothly tapered amount of fullness
+at the waist, preserving the existing sleeve/cuff fit and garment topology.
+
+This is a proportion adjustment to the existing shared male model, not new
+character variants or finished clothing art. The Blender studio portraits below
+compare the same Idle frame, camera and lights; they are asset review renders,
+not screenshots from Metal or performance measurements.
+
+![Before proportion correction](screenshots/resident-proportions-before.png)
+![After proportion correction](screenshots/resident-proportions-after.png)
