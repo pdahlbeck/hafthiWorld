@@ -121,3 +121,17 @@ two-worker walking/fishing snapshot after F9 and compared its full payload:
 simulation, cargo, headings and blend state were identical.
 
 ![Restored real log transport](screenshots/textured-resident-cargo-restored-low.png)
+
+## Neck and collar fit
+
+The source head's lower rim followed its original modern shirt: the rear edge
+ended about 5 cm above the project collar. The existing anatomical neck surface
+now continues 7.5 cm below its former lowest edge, inside the tunic, with its
+base weighted to Spine2. Upper garment weights blend from Spine1 to Spine2 so
+the collar follows the same upper chest during bends and turns. Head position,
+height, facial geometry, animation timings and save data are unchanged.
+
+The independent GLB check ray-tests every lower neck rim vertex against the
+actual skinned tunic, requiring it to remain inside.
+It covers rest pose, 36 clip poses and 18 crossfades; the prior asset fails this
+regression check. Front game captures have been refreshed after the correction.

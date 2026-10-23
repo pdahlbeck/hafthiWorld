@@ -92,6 +92,13 @@ for ob in [donor['Wool tunic'],donor['Linen neckline'],donor['Belt']]:
             origin,target,rotation=old_transforms[name]
             point+=(target+rotation@(p-origin)*scale)*weight
             mapped=map_bone[name];groups_out[mapped]=groups_out.get(mapped,0)+weight
+        # The collar must follow the upper chest like the anatomical neck base,
+        # rather than opening a gap as Spine2 bends relative to Spine1.
+        upper=max(0,min(1,(p.z-1.12)/.18))
+        chest_weight=groups_out.get('Bip01 Spine1',0)*upper
+        if chest_weight:
+            groups_out['Bip01 Spine1']-=chest_weight
+            groups_out['Bip01 Spine2']=chest_weight
         positions.append(point);weights.append(groups_out)
     costume_data.append((ob,positions,weights))
 # Normalize the complete dressed character, with its sole at zero and height 1.7 m.
@@ -167,6 +174,27 @@ for polygon,src in zip(mesh.polygons,faces):
     polygon.material_index=src.material_index;polygon.use_smooth=True
     for li,sli in zip(polygon.loop_indices,src.loop_indices):uv.data[li].uv=source_mesh.data.uv_layers.active.data[sli].uv
 weights=[{source_mesh.vertex_groups[g.group].name:g.weight for g in source_mesh.data.vertices[v].groups if source_mesh.vertex_groups[g.group].name in rest} for v in ids]
+# The source head was cut to fit a modern shirt: its rear neck rim ends about
+# 5 cm above our collar. Extend that existing, UV-mapped anatomical surface below
+# the tunic, retaining the head position/proportions and a continuous skin mesh.
+# Only the open lower neck rim moves; eyes, jaw, head and hands stay untouched.
+edge_use={}
+for polygon in mesh.polygons:
+    if polygon.material_index==1:
+        for edge in polygon.edge_keys:edge_use[edge]=edge_use.get(edge,0)+1
+neck_edges=[edge for edge,count in edge_use.items() if count==1 and all(mesh.vertices[i].co.z<1.48 for i in edge)]
+neck_rim=sorted({i for edge in neck_edges for i in edge})
+assert len(neck_edges)==len(neck_rim)==20,'Expected the original closed lower neck rim'
+assert all(sum(i in edge for edge in neck_edges)==2 for i in neck_rim)
+centre=sum((mesh.vertices[i].co for i in neck_rim),Vector())/len(neck_rim)
+neck_floor=min(mesh.vertices[i].co.z for i in neck_rim)-.075
+for i in neck_rim:
+    v=mesh.vertices[i]
+    v.co.x=centre.x+(v.co.x-centre.x)*.78
+    v.co.y=centre.y+(v.co.y-centre.y)*.78
+    v.co.z=neck_floor
+    weights[i]={'Bip01 Spine2':1.0}
+mesh.update()
 bind(ob,weights)
 for ob,positions,weights in costume_data:
     # Copy data so the donor source stays untouched and has no second armature.

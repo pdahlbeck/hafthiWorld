@@ -9,6 +9,7 @@ maps with project-authored costume, an 80-joint skeleton and four native Bevy
 animation clips. Each worker blends from its own saved task/clock; contact IK
 corrects stance feet and reaches towards actual cargo. Space and F5/F9 preserve
 paused and mid-transition poses; older saves load with default blend state.
+The anatomical neck extends inside the collar and shares its upper-chest deformation.
 **Tab** enters facing the founder in a fresh session; **F4** hides the HUD.
 See [actual captures, provenance and remaining limits](docs/textured-residents.md).
 All people still share one face; full skin SSS, new behavior AI, landscape
