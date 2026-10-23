@@ -65,7 +65,7 @@ for name in ['Resident skin head','Resident skin hands']:
 assert all('bufferView' in im and 'uri' not in im for im in g['images'])
 assert all(n.get('scale',[1,1,1])[0]<2 for n in g['nodes']), 'centimetre-scale node leaked into output'
 skin=g['skins'][0];inverse=read(skin['inverseBindMatrices']).reshape(-1,4,4).transpose(0,2,1)
-meshes=[];vertex_count=0;neck=None;shirt=None
+meshes=[];vertex_count=0;neck=None;shirt=None;wrists=None
 for mesh in g['meshes']:
  for p in mesh['primitives']:
   a=p['attributes'];pos=read(a['POSITION']);norm=read(a['NORMAL']);j=read(a['JOINTS_0']);w=read(a['WEIGHTS_0'])
@@ -79,6 +79,12 @@ for mesh in g['meshes']:
    ids=np.where(pos[:,1]<1.38)[0]
    assert len(np.unique(np.round(pos[ids],5),axis=0))==20,'Lower anatomical neck rim must extend inside the garment'
    neck=(homogeneous[ids],j[ids],w[ids])
+  elif material=='Resident skin hands':
+   forearm_ids=[i for i,node in enumerate(skin['joints']) if g['nodes'][node].get('name') in ('Bip01 L Forearm','Bip01 R Forearm')]
+   weight=sum(np.where(j==i,w,0).sum(axis=1) for i in forearm_ids)
+   ids=np.where(weight>.999)[0]
+   assert len(np.unique(np.round(pos[ids],5),axis=0))==52, 'Both hands need continuous proximal wrist rims'
+   wrists=(homogeneous[ids],j[ids],w[ids])
   elif material=='Undyed sage wool':
    shirt=(homogeneous,j,w,read(p['indices']).reshape(-1,3))
 def joint(name):
@@ -98,24 +104,28 @@ def skin_points(palette,part):
  pos,j,w=part[:3]
  return sum(np.einsum('nij,nj->ni',palette[j[:,k]],pos)*w[:,k,None] for k in range(4))[:,:3]
 
-def neck_inside_shirt(world,label):
+def skin_rim_inside_shirt(world,label,part):
  # Geometry-level regression: the entire open skin rim must be buried inside
  # the actual deformed closed tunic, not merely below a global collar height.
  # A fixed oblique ray avoids axis-aligned edges/caps. No Blender/GPU required.
- assert neck is not None and shirt is not None
+ assert part is not None and shirt is not None
  palette=np.array([world[j]@inv for j,inv in zip(skin['joints'],inverse)])
  triangles=skin_points(palette,shirt)[shirt[3]]
  a=triangles[:,0];e1=triangles[:,1]-a;e2=triangles[:,2]-a
  direction=np.array([1.,.113,.217]);direction/=np.linalg.norm(direction)
  h=np.cross(direction,e2);det=np.einsum('ij,ij->i',e1,h)
  inv=np.divide(1.,det,out=np.zeros_like(det),where=np.abs(det)>1e-10)
- for point in skin_points(palette,neck):
+ for point in skin_points(palette,part):
   offset=point-a;u=inv*np.einsum('ij,ij->i',offset,h)
   q=np.cross(offset,e1);v=inv*(q@direction)
   distance=inv*np.einsum('ij,ij->i',e2,q)
   hits=(np.abs(det)>1e-10)&(u>=0)&(v>=0)&(u+v<=1)&(distance>1e-7)
-  assert np.count_nonzero(hits)%2==1,(label,'exposed lower neck rim',point)
+  assert np.count_nonzero(hits)%2==1,(label,'exposed skin rim',point)
   assert distance[hits].min()>.003,(label,'ray exit clearance below 3 mm',point)
+
+def neck_inside_shirt(world,label):
+ skin_rim_inside_shirt(world,(label,'neck'),neck)
+ skin_rim_inside_shirt(world,(label,'wrists'),wrists)
 
 neck_inside_shirt(matrices(),'rest pose')
 
@@ -144,5 +154,5 @@ for a,c in combinations(animations.values(),2):
  dc=max(float(read(s['input'])[-1,0]) for s in c['samplers'])
  for weight in [.25,.5,.75]:
   neck_inside_shirt(matrices(a,da*.37,(c,dc*.61,weight)),(a['name'],c['name'],weight))
-print('Neck rim remains inside the deformed tunic in 36 clip samples and 18 crossfade samples')
+print('Neck and both wrist rims remain inside the deformed tunic in 36 clip samples and 18 crossfade samples')
 print('Validated',vertex_count,'vertices, 80 joints, four clips, embedded PBR maps and no horizontal root motion')

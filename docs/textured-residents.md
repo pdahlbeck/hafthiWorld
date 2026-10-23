@@ -153,3 +153,22 @@ not screenshots from Metal or performance measurements.
 
 ![Before proportion correction](screenshots/resident-proportions-before.png)
 ![After proportion correction](screenshots/resident-proportions-after.png)
+
+## Connected hands and sleeves
+
+Removing the modern source cuffs/watch also removed the anatomical wrist
+connection. Each hand now continues as a single skin surface through four
+weighted rings into the sleeve. Weights blend from hand to forearm; the
+proximal ring follows the forearm and stays buried inside the existing sleeve.
+The extension samples adjacent bare-palm texels rather than stretching the
+source wristwatch into a dark band. Fingers, skeleton, sockets and clip timing
+are retained. The mesh gains only 208 vertices before glTF UV splits.
+
+The independent GLB validator requires both continuous proximal wrist rims and
+ray-tests their containment inside the actual deformed tunic at rest, in 36
+animation poses and 18 crossfade samples. The previous asset fails this check.
+The matched studio portraits show the geometry/material change, not a native
+Metal gameplay or performance test.
+
+![Before wrist correction](screenshots/resident-wrists-before.png)
+![After wrist correction](screenshots/resident-wrists-after.png)

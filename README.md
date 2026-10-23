@@ -514,3 +514,8 @@ The resident proportion correction shortens the exposed neck by 4 cm while
 preserving facial shape, eyes/hair alignment and the neck/collar connection.
 A slightly fuller tunic waist softens the pinched torso silhouette. See the
 [matched asset portraits and limits](docs/textured-residents.md#proportion-correction).
+
+The wrist correction continues the anatomical hands into the sleeves with
+weighted forearm skin, removing the visible gap at each cuff. Export validation
+checks both connections through the animation clips and crossfades; see the
+[before/after portraits](docs/textured-residents.md#connected-hands-and-sleeves).

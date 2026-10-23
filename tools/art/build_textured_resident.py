@@ -196,6 +196,57 @@ for polygon,src in zip(mesh.polygons,faces):
     polygon.material_index=src.material_index;polygon.use_smooth=True
     for li,sli in zip(polygon.loop_indices,src.loop_indices):uv.data[li].uv=source_mesh.data.uv_layers.active.data[sli].uv
 weights=[{source_mesh.vertex_groups[g.group].name:g.weight for g in source_mesh.data.vertices[v].groups if source_mesh.vertex_groups[g.group].name in rest} for v in ids]
+# The modern wristwatch/cuff removal leaves two open hand rims. Continue each
+# anatomical rim into the sleeve with four skin rings; merely moving the hand
+# or covering the gap with cloth would still detach during wrist rotation.
+edge_counts={};oriented={}
+for polygon in mesh.polygons:
+    if polygon.material_index!=0:continue
+    vertices=list(polygon.vertices)
+    for a,b in zip(vertices,vertices[1:]+vertices[:1]):
+        edge=tuple(sorted((a,b)));edge_counts[edge]=edge_counts.get(edge,0)+1
+        oriented[edge]=(a,b)
+rim_edges=[oriented[e] for e,count in edge_counts.items() if count==1]
+assert len(rim_edges)==52, 'Expected two original 26-edge wrist rims'
+positions=[tuple(v.co) for v in mesh.vertices]
+polygons=[tuple(p.vertices) for p in mesh.polygons]
+materials=[p.material_index for p in mesh.polygons]
+face_uvs=[[tuple(uv.data[li].uv) for li in p.loop_indices] for p in mesh.polygons]
+vertex_uv={mesh.loops[li].vertex_index:tuple(uv.data[li].uv) for p in mesh.polygons if p.material_index==0 for li in p.loop_indices}
+for side in ['L','R']:
+    hand='Bip01 '+side+' Hand';forearm='Bip01 '+side+' Forearm'
+    wrist=rest[hand].translation;direction=(rest[forearm].translation-wrist).normalized()
+    edges=[e for e in rim_edges if all((mesh.vertices[v].co-wrist).length<.2 for v in e)]
+    rim=sorted({v for e in edges for v in e});assert len(rim)==len(edges)==26
+    centre=sum((mesh.vertices[v].co for v in rim),Vector())/len(rim)
+    target=wrist+direction*.10
+    # The cut rim borders the source's baked wristwatch. Sample the adjacent
+    # bare palm for the extension instead of stretching the watch texels along
+    # the entire new forearm.
+    candidates=[i for i in vertex_uv if i not in rim and (mesh.vertices[i].co-wrist).length<.20
+                and (mesh.vertices[i].co-wrist).dot(-direction)>.035]
+    assert candidates
+    skin_uv={v:vertex_uv[min(candidates,key=lambda i:(mesh.vertices[i].co-(mesh.vertices[v].co-direction*.04)).length_squared)] for v in rim}
+    previous={v:v for v in rim}
+    for layer in range(1,5):
+        t=layer/4;current={}
+        for v in rim:
+            point=mesh.vertices[v].co-centre
+            point=centre.lerp(target,t)+point*(1-.06*t)
+            current[v]=len(positions);positions.append(tuple(point))
+            weights.append({hand:1-t,forearm:t})
+        for a,b in edges:
+            polygons.append((previous[b],previous[a],current[a],current[b]))
+            face_uvs.append([skin_uv[b],skin_uv[a],skin_uv[a],skin_uv[b]])
+            materials.append(0)
+        previous=current
+# Preserve the source UVs and all original vertices, including fingers and face.
+mesh.clear_geometry();mesh.from_pydata(positions,[],polygons);mesh.update()
+uv=mesh.uv_layers.active or mesh.uv_layers.new(name='Source skin UV')
+for polygon,material,coords in zip(mesh.polygons,materials,face_uvs):
+    polygon.material_index=material;polygon.use_smooth=True
+    for li,co in zip(polygon.loop_indices,coords):uv.data[li].uv=co
+assert len(weights)==len(mesh.vertices)
 # The source head was cut to fit a modern shirt: its rear neck rim ends about
 # 5 cm above our collar. Extend that existing, UV-mapped anatomical surface below
 # the tunic, retaining the head position/proportions and a continuous skin mesh.
