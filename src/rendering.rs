@@ -10,7 +10,8 @@ struct Moonlight;
 pub struct CoastalRendererPlugin;
 impl Plugin for CoastalRendererPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup).add_systems(Update, expose);
+        app.add_systems(Startup, setup)
+            .add_systems(Update, expose.after(crate::world::DaylightUpdate));
     }
 }
 fn setup(
@@ -52,9 +53,15 @@ pub(crate) fn solar_frame(hour: f32) -> SolarFrame {
         -altitude.sin(),
         -azimuth.cos() * altitude.cos(),
     );
+    // Keep daylight exposure while the sun reaches the horizon. The atmosphere
+    // remains luminous through twilight: the former -2..13 EV curve amplified
+    // that sky by thousands of times just after sunset. Limit night gain to
+    // five stops and introduce it only as the sun sinks through twilight.
+    let night = ((-altitude - 0.10) / 0.22).clamp(0.0, 1.0);
+    let night = night * night * (3.0 - 2.0 * night);
     SolarFrame {
         rotation: Transform::default().looking_to(rays, Vec3::Y).rotation,
-        exposure: -2.0 + 15.0 * t,
+        exposure: 13.0 - 5.0 * night,
         moonlight: 0.25 * (1.0 - t),
     }
 }
@@ -75,6 +82,38 @@ fn expose(
 mod tests {
     use super::*;
     #[test]
+    fn exposure_tracks_the_current_hour_without_a_stale_frame() {
+        let mut app = App::new();
+        app.init_resource::<Daylight>().add_systems(
+            Update,
+            (
+                expose.after(crate::world::DaylightUpdate),
+                (|mut day: ResMut<Daylight>| day.hour = 18.0 + 11.0 / 60.0)
+                    .in_set(crate::world::DaylightUpdate),
+            ),
+        );
+        let camera = app
+            .world_mut()
+            .spawn((
+                Exposure { ev100: -2.0 },
+                bevy::pbr::AtmosphereSettings::default(),
+            ))
+            .id();
+        app.update();
+        assert_eq!(app.world().get::<Exposure>(camera).unwrap().ev100, 13.0);
+    }
+    #[test]
+    fn bright_twilight_does_not_trigger_extreme_night_gain() {
+        // Regression for the reported washed-out scene at 18:11. Both dawn
+        // and dusk keep daytime exposure while atmospheric light is strong.
+        for hour in [5.8, 6.0, 6.2, 17.8, 18.0, 18.0 + 11.0 / 60.0, 18.2] {
+            assert_eq!(solar_frame(hour).exposure, 13.0);
+        }
+        assert_eq!(solar_frame(0.0).exposure, 8.0);
+        let max_gain = 2.0_f32.powf(13.0 - solar_frame(0.0).exposure);
+        assert_eq!(max_gain, 32.0);
+    }
+    #[test]
     fn physical_sun_crosses_the_horizon_and_exposure_restores_from_hour() {
         // A directional light shines down by day and points away below the horizon at night.
         assert!((solar_frame(12.0).rotation * Vec3::NEG_Z).y < -0.7);
@@ -85,7 +124,7 @@ mod tests {
             let hour = step as f32 / 60.0;
             let f = solar_frame(hour);
             let restored = solar_frame(hour + 24.0);
-            assert!(f.rotation.is_finite() && (-2.0..=13.0).contains(&f.exposure));
+            assert!(f.rotation.is_finite() && (8.0..=13.0).contains(&f.exposure));
             assert!((f.exposure - restored.exposure).abs() < 0.0001);
             assert!(f.rotation.abs_diff_eq(restored.rotation, 0.0001));
             assert!((f.exposure - solar_frame(hour + 1.0 / 60.0).exposure).abs() < 0.2);

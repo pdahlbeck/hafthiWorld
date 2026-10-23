@@ -22,8 +22,12 @@ engine fork. A fork alone would not replace poor scene art. The runtime now uses
 - One solar frame derived directly from the saved presentation hour. The sun
   crosses below the horizon at night. Exposure has no temporal adaptation state,
   so camera switches and F9 do not require convergence to the saved hour.
-  Night adds a 0.25 lux cool directional fill and longer photographic exposure
-  for readability. This is an artistic full-moon floor, not a lunar ephemeris.
+  Night adds a 0.25 lux cool directional fill and bounded photographic exposure
+  (EV 8–13). Daylight exposure remains EV 13 through the horizon crossing;
+  a smooth transition begins below the horizon, avoiding extreme amplification
+  of the still-bright twilight sky. Lighting updates precede exposure updates
+  in the same frame. The night fill is an artistic full-moon floor, not a lunar
+  ephemeris. The bounded gain intentionally leaves night darker than daytime.
 
 Low retains the old light/fog pipeline without atmospheric environment-map
 compute passes, contact shadows or TAA. It shares the revised art and terrain

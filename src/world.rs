@@ -2,12 +2,22 @@
 use crate::{calendar::Season, performance::VisualQuality, simulation::Settlement};
 use bevy::{asset::RenderAssetUsages, mesh::PrimitiveTopology, prelude::*};
 
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct DaylightUpdate;
+
 pub struct WorldPlugin;
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Daylight>()
             .add_systems(Startup, setup)
-            .add_systems(Update, (animate_meadow, daylight, seasonal_palette));
+            .add_systems(
+                Update,
+                (
+                    animate_meadow,
+                    daylight.in_set(DaylightUpdate),
+                    seasonal_palette,
+                ),
+            );
     }
 }
 

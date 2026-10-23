@@ -9,6 +9,9 @@ photographic exposure, ACES and contact shadows. Original textured reed roofing
 and alpha-cut pine branches replace the flat roof and triangular needle fans;
 terrain has broad material variation rather than a uniformly speckled surface.
 Use `cargo run --release --locked -- --quality high`; **F4** hides the HUD.
+Twilight keeps daylight exposure until the sun is below the horizon, with night
+gain limited to five stops to prevent the reported sunset whiteout. **T** pauses
+the sun and **Y** advances three hours for checking the cycle.
 Low keeps the lighter lighting pipeline. See [renderer review](docs/physical-renderer.md)
 for architecture, controls and remaining visual limitations. These changes do
 not establish the supplied reference image's finished-game quality.
