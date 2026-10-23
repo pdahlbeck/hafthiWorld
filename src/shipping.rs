@@ -302,7 +302,7 @@ fn setup(
                         blue_tunic.clone()
                     };
                     crew.spawn((
-                        crate::resident::StaticHuman,
+                        crate::resident::StaticHuman(index as u32 + 3),
                         Mesh3d(meshes.add(crate::art::tunic())),
                         MeshMaterial3d(tunic.clone()),
                         Transform::from_xyz(0., 0.42, 0.).with_scale(Vec3::splat(0.60)),

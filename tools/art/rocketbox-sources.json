@@ -1,0 +1,62 @@
+{
+  "repository": "microsoft/Microsoft-Rocketbox",
+  "commit": "0943055db6ec570bcef9f2c8b41c9e5467c808f9",
+  "license": "MIT",
+  "files": [
+    {
+      "upstream": "Assets/Animations/all_animations_max_motextr_static/m_idle_breathe_01.max.fbx",
+      "local": "animations/m_idle_breathe_01.max.fbx",
+      "sha256": "281735704260d96e882d13e3c77d0ede00ed5d2e40805cd305000b3e5cbb1090"
+    },
+    {
+      "upstream": "Assets/Animations/all_animations_max_motextr_static/m_work_mid.max.fbx",
+      "local": "animations/m_work_mid.max.fbx",
+      "sha256": "ee757d60b1b63b09d5cea245ba23d8435d2f03a173ca08b270142ec3d57e2e2a"
+    },
+    {
+      "upstream": "Assets/Animations/all_animations_max_motextr_static/m_work_table.max.fbx",
+      "local": "animations/m_work_table.max.fbx",
+      "sha256": "4dca2de964fec11c05c2083f3d9bdf7e36b7d51406d76e1d4704220c27071b90"
+    },
+    {
+      "upstream": "Assets/Animations/all_animations_max_motextr_xy/m_walk_neutral_01.max.fbx",
+      "local": "animations/m_walk_neutral_01.max.fbx",
+      "sha256": "e6805ae6b6b49fe10f06c1b17b14ddde90d09b9fea689ac34793df252f44dcd0"
+    },
+    {
+      "upstream": "Assets/Avatars/Adults/Male_Adult_05/Export/Male_Adult_05.fbx",
+      "local": "adult05/Male_Adult_05.fbx",
+      "sha256": "cd0e17505d7b4148cf3b19ccdec9a90f063671f841b60d193d3527a0980052d0"
+    },
+    {
+      "upstream": "Assets/Avatars/Adults/Male_Adult_05/Textures/m009_body_color.tga",
+      "local": "adult05/Textures/m009_body_color.tga",
+      "sha256": "cf5704a0c083d57dab9b7cfdb797d8440fffd0128c7b560b8daad15c5dbcaad7"
+    },
+    {
+      "upstream": "Assets/Avatars/Adults/Male_Adult_05/Textures/m009_body_normal.tga",
+      "local": "adult05/Textures/m009_body_normal.tga",
+      "sha256": "17fe756165fb9d39ee0c1bbae956bcc01360fd2a333c258b95bbe4002975458d"
+    },
+    {
+      "upstream": "Assets/Avatars/Adults/Male_Adult_05/Textures/m009_head_color.tga",
+      "local": "adult05/Textures/m009_head_color.tga",
+      "sha256": "2ff27ddb9b4b63ec75ab121813890c34be569c26de99687cbf29e84cb814a22e"
+    },
+    {
+      "upstream": "Assets/Avatars/Adults/Male_Adult_05/Textures/m009_head_normal.tga",
+      "local": "adult05/Textures/m009_head_normal.tga",
+      "sha256": "c7077420b31c5146ce30d2ead43d530d7ceeb432ead7f56db185f64496e26b6c"
+    },
+    {
+      "upstream": "Assets/Avatars/Adults/Male_Adult_05/Textures/m009_head_specular.tga",
+      "local": "adult05/Textures/m009_head_specular.tga",
+      "sha256": "0ca98624af25a348b71715ca187be77c399def7cb47464979b4cad614b7d7871"
+    },
+    {
+      "upstream": "Assets/Avatars/Adults/Male_Adult_05/Textures/m009_opacity_color.tga",
+      "local": "adult05/Textures/m009_opacity_color.tga",
+      "sha256": "959801169cfd2274b72d8c7a052d4b83029c5f9a8afddf8d69837361fd411cf2"
+    }
+  ]
+}
