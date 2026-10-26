@@ -17,6 +17,7 @@ const MAX_SAVE_BYTES: u64 = 1024 * 1024;
 #[derive(Resource, Default)]
 pub struct Session {
     pub paused: bool,
+    pub fast: bool,
     message: String,
 }
 pub fn running(session: Res<Session>) -> bool {
@@ -26,6 +27,8 @@ pub struct SessionPlugin;
 impl Plugin for SessionPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Session>()
+            .init_resource::<PendingSpeed>()
+            .add_observer(queue_speed)
             .add_systems(Startup, setup)
             .add_systems(PreUpdate, controls.after(bevy::input::InputSystems))
             .add_systems(Update, status.after(CameraInput));
@@ -257,7 +260,26 @@ fn read_save(path: &Path) -> Result<Snapshot, String> {
     }
     Snapshot::decode(&bytes)
 }
+#[derive(Resource, Default)]
+struct PendingSpeed(bool);
+#[derive(Component)]
+struct SpeedButton;
+#[derive(Component)]
+struct SpeedLabel;
+fn queue_speed(
+    event: On<bevy::ui_widgets::Activate>,
+    buttons: Query<(), With<SpeedButton>>,
+    mut pending: ResMut<PendingSpeed>,
+) {
+    if buttons.contains(event.entity) {
+        pending.0 = true;
+    }
+}
 fn controls(world: &mut World) {
+    let button = world
+        .get_resource_mut::<PendingSpeed>()
+        .map(|mut p| std::mem::take(&mut p.0))
+        .unwrap_or(false);
     if !world
         .query_filtered::<&Window, With<PrimaryWindow>>()
         .iter(world)
@@ -266,9 +288,17 @@ fn controls(world: &mut World) {
         return;
     }
     let keys = world.resource::<ButtonInput<KeyCode>>();
+    let speed = keys.just_pressed(KeyCode::F7);
     let pause = keys.just_pressed(KeyCode::Space);
     let save = keys.just_pressed(KeyCode::F5);
     let load = keys.just_pressed(KeyCode::F9);
+    let clickable = world
+        .get_resource::<crate::camera::CameraRig>()
+        .is_none_or(|r| r.mode == crate::camera::CameraMode::Strategy || !r.captured);
+    if speed || (button && clickable) {
+        let mut session = world.resource_mut::<Session>();
+        session.fast = !session.fast;
+    }
     if pause {
         let mut session = world.resource_mut::<Session>();
         session.paused = !session.paused;
@@ -299,6 +329,32 @@ fn controls(world: &mut World) {
 #[derive(Component)]
 struct SessionStatus;
 fn setup(mut commands: Commands) {
+    commands
+        .spawn((
+            SpeedButton,
+            bevy::ui_widgets::Button,
+            bevy::ui_widgets::ActivateOnPress,
+            bevy::picking::hover::Hovered::default(),
+            BackgroundColor(Color::srgb(0.24, 0.30, 0.23)),
+            Node {
+                position_type: PositionType::Absolute,
+                right: px(12),
+                bottom: px(185),
+                padding: UiRect::axes(px(12), px(7)),
+                ..default()
+            },
+        ))
+        .with_children(|button| {
+            button.spawn((
+                SpeedLabel,
+                Text::new("Test speed: 1x  [F7]"),
+                TextFont {
+                    font_size: px(16).into(),
+                    ..default()
+                },
+                TextColor(Color::WHITE),
+            ));
+        });
     commands.spawn((
         SessionStatus,
         Text::new(""),
@@ -317,13 +373,39 @@ fn setup(mut commands: Commands) {
         },
     ));
 }
-fn status(session: Res<Session>, mut text: Query<&mut Text, With<SessionStatus>>) {
+fn status(
+    session: Res<Session>,
+    mut text: Query<&mut Text, (With<SessionStatus>, Without<SpeedLabel>)>,
+    mut labels: Query<&mut Text, (With<SpeedLabel>, Without<SessionStatus>)>,
+    mut buttons: Query<(&mut BackgroundColor, &mut Node), With<SpeedButton>>,
+    rig: Option<Res<crate::camera::CameraRig>>,
+) {
+    let multiplier = if session.fast { 4 } else { 1 };
     if let Ok(mut text) = text.single_mut() {
         text.0 = format!(
-            "{} | Space: pause | F5: save | F9: load\n{}",
+            "{} | {}x | Space: pause | F5: save | F9: load\n{}",
             if session.paused { "PAUSED" } else { "RUNNING" },
+            multiplier,
             session.message
         );
+    }
+    for mut label in &mut labels {
+        label.0 = format!("Test speed: {multiplier}x  [F7]");
+    }
+    for (mut color, mut node) in &mut buttons {
+        node.display = if rig
+            .as_ref()
+            .is_some_and(|r| r.mode == crate::camera::CameraMode::FirstPerson && r.captured)
+        {
+            Display::None
+        } else {
+            Display::Flex
+        };
+        color.0 = if session.fast {
+            Color::srgb(0.50, 0.33, 0.10)
+        } else {
+            Color::srgb(0.24, 0.30, 0.23)
+        };
     }
 }
 
@@ -386,6 +468,109 @@ mod tests {
     }
     fn bytes(app: &mut App) -> Vec<u8> {
         Snapshot::capture(app.world_mut()).encode().unwrap()
+    }
+    #[test]
+    fn four_times_speed_matches_four_normal_steps_and_leaves_camera_time_alone() {
+        let mut normal = app();
+        let mut fast = app();
+        fast.world_mut().resource_mut::<Session>().fast = true;
+        for game in [&mut normal, &mut fast] {
+            let mut s = game.world_mut().resource_mut::<Settlement>();
+            s.request_helper();
+            s.request_build();
+            s.household.hearth.request();
+            for i in 0..3 {
+                s.request_harvest(i);
+            }
+        }
+        let fast_wall_start = fast.world().resource::<Time<Virtual>>().elapsed_secs_f64();
+        let fast_start = fast.world().resource::<SimulationClock>().0;
+        for _ in 0..4 {
+            for _ in 0..400 {
+                normal.update();
+            }
+            for _ in 0..100 {
+                fast.update();
+            }
+            assert_eq!(bytes(&mut normal), bytes(&mut fast));
+            for game in [&mut normal, &mut fast] {
+                let mut s = game.world_mut().resource_mut::<Settlement>();
+                for i in 0..3 {
+                    s.request_planting(i);
+                }
+            }
+        }
+        let wall = fast.world().resource::<Time<Virtual>>().elapsed_secs_f64() - fast_wall_start;
+        let sim = fast.world().resource::<SimulationClock>().0 - fast_start;
+        assert!((sim - 4.0 * wall).abs() < 0.001);
+        fast.world_mut().resource_mut::<Session>().paused = true;
+        let before = bytes(&mut fast);
+        for _ in 0..10 {
+            fast.update();
+        }
+        assert_eq!(bytes(&mut fast), before);
+        let mut loaded = app();
+        Snapshot::decode(&before)
+            .unwrap()
+            .restore(loaded.world_mut());
+        assert!(loaded.world().resource::<Session>().paused);
+        assert!(!loaded.world().resource::<Session>().fast); // Test preference is not game progress.
+    }
+    #[test]
+    fn speed_button_and_f7_respect_focus_and_do_not_unpause() {
+        use bevy::{ecs::system::RunSystemOnce, ui_widgets::Activate};
+        let mut game = app();
+        game.init_resource::<ButtonInput<KeyCode>>()
+            .init_resource::<PendingSpeed>()
+            .add_observer(queue_speed);
+        let window = game
+            .world_mut()
+            .spawn((
+                Window {
+                    focused: true,
+                    ..default()
+                },
+                PrimaryWindow,
+            ))
+            .id();
+        game.world_mut().run_system_once(setup).unwrap();
+        let button = game
+            .world_mut()
+            .query_filtered::<Entity, With<SpeedButton>>()
+            .single(game.world())
+            .unwrap();
+        game.world_mut().resource_mut::<Session>().paused = true;
+        game.world_mut().trigger(Activate { entity: button });
+        controls(game.world_mut());
+        game.world_mut().run_system_once(status).unwrap();
+        assert!(
+            game.world_mut()
+                .query_filtered::<&Text, With<SpeedLabel>>()
+                .single(game.world())
+                .unwrap()
+                .0
+                .contains("4x")
+        );
+        assert!(
+            game.world().resource::<Session>().fast && game.world().resource::<Session>().paused
+        );
+        game.world_mut().get_mut::<Window>(window).unwrap().focused = false;
+        game.world_mut().trigger(Activate { entity: button });
+        controls(game.world_mut());
+        game.world_mut().get_mut::<Window>(window).unwrap().focused = true;
+        controls(game.world_mut());
+        assert!(game.world().resource::<Session>().fast);
+        game.world_mut().trigger(Activate { entity: button });
+        controls(game.world_mut());
+        assert!(!game.world().resource::<Session>().fast);
+        game.world_mut().resource_mut::<CameraRig>().toggle();
+        game.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::F7);
+        controls(game.world_mut());
+        assert!(
+            game.world().resource::<Session>().fast && game.world().resource::<Session>().paused
+        );
     }
     #[test]
     fn forestry_snapshots_preserve_growth_new_log_ids_and_timber_priority() {

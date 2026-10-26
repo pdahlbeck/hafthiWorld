@@ -2,6 +2,17 @@
 
 Rust + Bevy 0.20 settlement simulation inspired by Viking Age Gotland. The second scoped milestone from [issue #1](https://github.com/pdahlbeck/hafthiWorld/issues/1) adds a playable resource chain: **order tree felling → carry logs to storage → carry stored timber to a construction site → finish a timber rack**. Strategy and first person observe the same running ECS world. Milestone 3 adds an original procedural coastal visual pass and portable performance instrumentation. The following small slices add a crop/seed loop, a two-sheep fleece chain and a first owned household pantry and a finite shore barter offer, using the same worker and storage. The founder, optional coastal helper, three finite trees and material-backed timber rack remain the same shared simulation in both views. A fresh session is solo; **N** invites the second resident and assigns coastal work, as described below. Earlier smoke tests assume N is omitted.
 
+## Faster playtesting
+
+Click **Test speed: 1x / 4x** above the pause/save panel, or press **F7**, to
+switch test speed. Work, forest/crop growth, seasons, voyages and food/firewood
+consumption all run four times faster. Camera movement, sunlight and the sea
+stay at normal speed. Space pauses either speed. In first person, use F7 or
+release the mouse with Esc to click the button.
+
+The setting starts at 1x on launch and is not written into save files. F9 retains
+your current test-speed choice and loads the world paused, as before.
+
 ## Forestry and timber priorities
 
 This version adds **two steps together**: replanting/regrowth and timber planning.
@@ -73,6 +84,7 @@ macOS uses Metal; Linux needs a working graphics driver/display and Bevy's nativ
 | I | Cycle inspection: home, residents, boat, closed | Same control, also with mouse released |
 | F3 | Hide/show performance panel | Same panel |
 | Space | Pause/resume the settlement | Same control, also with mouse released |
+| F7 / Test speed button | Toggle simulation between 1x and 4x | F7 works while captured; release mouse for the button |
 | F5 / F9 | Save / load session | Same controls, also with mouse released |
 | W/A/S/D | Orbit | Walk |
 | Q/E or mouse wheel | Zoom | — |

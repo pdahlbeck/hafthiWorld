@@ -943,13 +943,18 @@ fn simulate(
     mut clock: ResMut<SimulationClock>,
     mut settlement: ResMut<Settlement>,
     mut workers: Query<&mut Worker>,
+    session: Res<crate::session::Session>,
 ) {
-    clock.0 += time.delta_secs_f64();
-    settlement.advance_environment(time.delta_secs_f64());
     let mut crew: Vec<_> = workers.iter_mut().collect();
     crew.sort_by_key(|w| w.id);
-    for mut worker in crew {
-        worker.advance_work(time.delta_secs(), &mut settlement);
+    // Repeat ordinary fixed steps rather than enlarging dt: work, seasons and
+    // consumption stay on the same simulation clock. Camera/lighting stay 1x.
+    for _ in 0..if session.fast { 4 } else { 1 } {
+        clock.0 += time.delta_secs_f64();
+        settlement.advance_environment(time.delta_secs_f64());
+        for worker in &mut crew {
+            worker.advance_work(time.delta_secs(), &mut settlement);
+        }
     }
 }
 #[cfg(test)]

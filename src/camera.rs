@@ -143,6 +143,7 @@ fn controls(
     mut windows: Query<(&Window, &mut CursorOptions), With<PrimaryWindow>>,
     mut camera: Query<&mut Transform, With<WorldCamera>>,
     mut exit: MessageWriter<AppExit>,
+    ui_buttons: Query<&bevy::picking::hover::Hovered, With<bevy::ui_widgets::Button>>,
 ) {
     let Ok((window, mut cursor)) = windows.single_mut() else {
         return;
@@ -164,6 +165,7 @@ fn controls(
             }
         } else if rig.mode == CameraMode::FirstPerson
             && input.buttons.just_pressed(MouseButton::Left)
+            && !ui_buttons.iter().any(|h| h.get())
         {
             rig.captured = true;
         }
