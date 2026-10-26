@@ -5,6 +5,9 @@ use crate::{
 };
 use bevy::prelude::*;
 pub fn walking(task: Task) -> bool {
+    if let Task::NewHome(_, phase) = task {
+        return phase.walking();
+    }
     matches!(
         task,
         Task::ToCrewRest

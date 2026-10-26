@@ -49,6 +49,7 @@ pub enum OrderButton {
     SaltFish,
     InviteHelper,
     CollectWool,
+    Homestead,
 }
 fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
     match order {
@@ -67,6 +68,9 @@ fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
                 "This tree is already ordered or felled."
             };
         }
+        OrderButton::Homestead => {
+            ui.feedback = settlement.order_homestead();
+        }
         OrderButton::CollectWool => {
             ui.feedback = match settlement.request_shipment() {
                 Ok(false) => {
@@ -82,7 +86,7 @@ fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
             ui.feedback = if settlement.request_helper() {
                 "Coastal helper invited. The resident finishes the current coastal job before handing it over."
             } else {
-                "The coastal helper has already been invited; there are two residents at most."
+                "The original household already has its coastal helper."
             };
         }
         OrderButton::Fish => {
@@ -198,7 +202,7 @@ struct OrderControls<'w> {
     keys: Res<'w, ButtonInput<KeyCode>>,
     mouse: Res<'w, ButtonInput<MouseButton>>,
     rig: Res<'w, CameraRig>,
-    inspection: Res<'w, crate::inspection::Inspection>,
+    inspection: ResMut<'w, crate::inspection::Inspection>,
 }
 #[derive(Resource, Default)]
 struct PendingOrders(Vec<OrderButton>);
@@ -212,7 +216,7 @@ fn queue_button(
     }
 }
 fn issue_orders(
-    input: OrderControls,
+    mut input: OrderControls,
     windows: Query<&Window, With<PrimaryWindow>>,
     camera: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
     mut pending: ResMut<PendingOrders>,
@@ -251,6 +255,10 @@ fn issue_orders(
     }
     if input.keys.just_pressed(KeyCode::KeyF) {
         apply(OrderButton::Harvest, &mut ui, &mut settlement);
+    }
+    if input.keys.just_pressed(KeyCode::KeyG) {
+        apply(OrderButton::Homestead, &mut ui, &mut settlement);
+        input.inspection.subject = Some(crate::inspection::Subject::NewHome);
     }
     if input.keys.just_pressed(KeyCode::KeyB) {
         apply(OrderButton::Build, &mut ui, &mut settlement);
@@ -504,6 +512,19 @@ mod tests {
                 app.world().resource::<Settlement>().fishery.salting_ordered,
                 allowed
             );
+            {
+                let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+                keys.reset_all();
+                keys.press(KeyCode::KeyG);
+            }
+            app.world_mut().resource_mut::<Settlement>().homestead =
+                crate::homestead::Homestead::default();
+            app.update();
+            assert_eq!(
+                app.world().resource::<Settlement>().homestead.ordered,
+                allowed
+            );
+
             app.world_mut().resource_mut::<Settlement>().flock = crate::livestock::Flock::default();
             {
                 let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();

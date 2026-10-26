@@ -20,6 +20,7 @@ const PANEL_TOP: f32 = 20.0;
 const PANEL_HEIGHT: f32 = 310.0;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Subject {
+    NewHome,
     Home,
     Resident(u32),
     Boat,
@@ -46,7 +47,7 @@ impl Inspection {
             Some(Subject::Home) => Some(Subject::Resident(1)),
             Some(Subject::Resident(1)) if helper => Some(Subject::Resident(2)),
             Some(Subject::Resident(_)) => Some(Subject::Boat),
-            Some(Subject::Boat) => None,
+            Some(Subject::Boat | Subject::NewHome) => None,
         };
     }
     fn over_panel(&self, cursor: Vec2, window: &Window) -> bool {
@@ -211,6 +212,14 @@ fn pick_subject<'a>(
     ) {
         hits.push((Subject::Home, distance));
     }
+    if let Some(distance) = ray_box(
+        origin,
+        direction,
+        Vec3::new(crate::homestead::CENTER.x, 1.2, crate::homestead::CENTER.y),
+        Vec3::new(1.5, 1.2, 2.0),
+    ) {
+        hits.push((Subject::NewHome, distance));
+    }
     if s.voyage.visible() {
         let p = s.voyage.position();
         if let Some(distance) = ray_box(
@@ -327,6 +336,7 @@ fn job(task: Task) -> &'static str {
         Task::ToTradeStore => "Collecting wool for barter",
         Task::LoadingTradeWool => "Picking up barter wool",
         Task::ToTrader => "Carrying wool to visitor",
+        Task::NewHome(_, _) => "Working for the second farmstead",
         Task::HandingTradeWool => "Paying wool for salt",
         Task::LoadingSalt => "Picking up paid salt",
         Task::FromTrader => "Returning from visitor",
@@ -335,6 +345,22 @@ fn job(task: Task) -> &'static str {
 }
 fn description(subject: Subject, s: &Settlement, workers: &[&Worker]) -> String {
     match subject {
+        Subject::NewHome => {
+            let h = &s.homestead;
+            let pantry = crate::homestead::food(s, 2);
+            format!(
+                "SECOND FARMSTEAD\nTimber delivered: {} / {}\nBuilt: {} | resident: {}\n\nPantry: {} portions\nFood used: {} | missed: {}\nFirewood: {} | burned: {}\n\nG: order building / invite resident\nThe new resident carries real food and fuel to this household.",
+                s.homestead_timbers(),
+                crate::homestead::TIMBER_COST,
+                h.complete,
+                h.arrived,
+                pantry,
+                h.household.food_used,
+                h.household.missed_rations,
+                s.count(LogLocation::Home(2)),
+                h.household.hearth.burned
+            )
+        }
         Subject::Resident(id) => {
             let Some(w) = workers.iter().find(|w| w.id == id) else {
                 return "Resident unavailable".into();
@@ -343,6 +369,8 @@ fn description(subject: Subject, s: &Settlement, workers: &[&Worker]) -> String 
                 "RESIDENT {id}\nRole: {}\nHome: {}\n\n{}\nCarrying: {}\n\nCoastal work held by: {}",
                 if w.role == crate::simulation::WorkerRole::Coastal {
                     "coastal worker"
+                } else if w.home_id == 2 {
+                    "household 2 food and fuel provider"
                 } else {
                     "founder / general work"
                 },
@@ -436,6 +464,7 @@ fn setup(mut commands: Commands) {
                 .with_children(|nav| {
                     for (label, subject) in [
                         ("Home", Some(Subject::Home)),
+                        ("H2", Some(Subject::NewHome)),
                         ("R1", Some(Subject::Resident(1))),
                         ("R2", Some(Subject::Resident(2))),
                         ("Boat", Some(Subject::Boat)),

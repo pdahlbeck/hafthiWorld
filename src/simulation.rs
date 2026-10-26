@@ -1,6 +1,8 @@
 //! Fixed-step logistics, independent of cameras, input and rendering.
 #[path = "coastal_work.rs"]
 mod coastal_work;
+#[path = "homestead_work.rs"]
+mod homestead_work;
 use crate::calendar::Calendar;
 use crate::farming::{CropPhase, FIELD_WORK, Farm, GrainLocation, SeedLocation, grain_position};
 use crate::fishing::{CoastalTask, FishLocation, Fishery};
@@ -35,7 +37,7 @@ impl Plugin for SimulationPlugin {
             .add_systems(Startup, spawn_worker)
             .add_systems(
                 FixedUpdate,
-                (invite_helper, simulate)
+                (invite_helper, crate::homestead::spawn_resident, simulate)
                     .chain()
                     .run_if(crate::session::running),
             );
@@ -53,6 +55,7 @@ pub enum LogLocation {
     Carried,
     Stored,
     Installed,
+    Homestead,
     Home(u32),
     Burned(u32),
 }
@@ -69,6 +72,8 @@ pub struct Settlement {
     pub farm: Farm,
     pub flock: Flock,
     pub household: Household,
+    #[serde(default)]
+    pub homestead: crate::homestead::Homestead,
     pub barter: Barter,
     pub calendar: Calendar,
     pub fishery: Fishery,
@@ -89,6 +94,7 @@ impl Default for Settlement {
             farm: Farm::default(),
             flock: Flock::default(),
             household: Household::default(),
+            homestead: crate::homestead::Homestead::default(),
             barter: Barter::default(),
             calendar: Calendar::default(),
             fishery: Fishery::default(),
@@ -118,6 +124,18 @@ impl Settlement {
             self.household.id,
             &mut self.logs,
         );
+        if self.homestead.arrived {
+            self.homestead.household.hearth.advance(
+                (seconds - growth_seconds).max(0.0),
+                2,
+                &mut self.logs,
+            );
+            self.homestead.household.advance_food(
+                seconds,
+                &mut self.farm.grain,
+                &mut self.fishery.fish,
+            );
+        }
         self.flock.graze(seconds);
         self.household
             .advance_food(seconds, &mut self.farm.grain, &mut self.fishery.fish);
@@ -157,6 +175,7 @@ pub fn ground_log_position(log: usize) -> Vec2 {
 pub struct SimulationClock(pub f64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Task {
+    NewHome(crate::homestead::Job, crate::homestead::Phase),
     Coastal(CoastalTask),
     ToCrewRest,
     Idle,
@@ -296,6 +315,9 @@ impl Default for Worker {
 impl Worker {
     pub(crate) fn valid_snapshot(&self) -> bool {
         let limit = match self.task {
+            Task::NewHome(crate::homestead::Job::Grain | crate::homestead::Job::Fish, _) => {
+                crate::farming::GRAIN_UNITS
+            }
             Task::ToTree | Task::Felling => TREE_POSITIONS.len(),
             Task::ToSheep | Task::Shearing => crate::livestock::SHEEP_COUNT,
             Task::LoadingSalt => crate::trade::SALT_UNITS,
@@ -323,7 +345,7 @@ impl Worker {
             && self.facing.is_finite()
             && self.handling.is_finite()
             && self.handling >= 0.0
-            && self.home_id == HOME_ID
+            && (self.home_id == HOME_ID || (self.id == 3 && self.home_id == 2))
             && [
                 self.carrying,
                 self.carrying_grain,
@@ -359,6 +381,7 @@ impl Worker {
     }
     fn choose_coastal_supply(&mut self, s: &mut Settlement) -> bool {
         if self.can_take_coastal(s)
+            && s.first_home_food_room()
             && s.household.supply_ordered
             && self.home_id == s.household.id
             && let Some(fish) = s.fishery.first(FishLocation::PreservedStored)
@@ -397,6 +420,9 @@ impl Worker {
         if settlement.coastal_owner == Some(self.id) {
             settlement.coastal_owner = None;
         }
+        if self.id == 3 && self.home_id == 2 {
+            return self.choose_new_home(settlement);
+        }
         if self.role == WorkerRole::Coastal {
             if self.choose_coastal_supply(settlement)
                 || self.choose_salting(settlement)
@@ -413,7 +439,8 @@ impl Worker {
         }
         if settlement.household.hearth.ordered
             && self.home_id == settlement.household.id
-            && settlement.count(LogLocation::Home(self.home_id)) < crate::hearth::FUEL_TARGET
+            && settlement.count(LogLocation::Home(self.home_id))
+                < settlement.first_home_fuel_limit()
             && let Some(log) = settlement
                 .logs
                 .iter()
@@ -429,6 +456,7 @@ impl Worker {
             return true;
         }
         if settlement.household.supply_ordered
+            && settlement.first_home_food_room()
             && self.home_id == settlement.household.id
             && let Some(grain) = settlement
                 .farm
@@ -444,6 +472,9 @@ impl Worker {
             || self.choose_salting(settlement)
             || self.choose_shipment(settlement)
         {
+            return true;
+        }
+        if self.choose_new_build(settlement) {
             return true;
         }
         if let Some(wool) = settlement.barter.wool_candidate(&settlement.flock.wool) {
@@ -556,6 +587,9 @@ impl Worker {
         }
         while seconds > 0.0 {
             match self.task {
+                Task::NewHome(job, phase) => {
+                    self.advance_new_home(&mut seconds, settlement, job, phase)
+                }
                 Task::Coastal(task) => self.advance_coastal(&mut seconds, settlement, task),
                 Task::Idle => {
                     if !self.choose_task(settlement) {
@@ -944,6 +978,39 @@ mod tests {
                 w.task,
                 w.position
             );
+        }
+    }
+    #[test]
+    fn two_households_racing_for_one_salted_fish_cannot_duplicate_or_panic() {
+        use crate::homestead::{Job, Phase};
+        for settler_first in [true, false] {
+            let mut s = Settlement::default();
+            s.fishery.fish[0] = FishLocation::PreservedStored;
+            let mut coast = Worker {
+                id: 2,
+                role: WorkerRole::Coastal,
+                task: Task::Coastal(CoastalTask::LoadingMeal),
+                ..default()
+            };
+            let mut settler = Worker {
+                id: 3,
+                home_id: 2,
+                task: Task::NewHome(Job::Fish, Phase::Load),
+                ..default()
+            };
+            if settler_first {
+                settler.advance_work(HANDLING_SECONDS, &mut s);
+                coast.advance_work(HANDLING_SECONDS, &mut s);
+            } else {
+                coast.advance_work(HANDLING_SECONDS, &mut s);
+                settler.advance_work(HANDLING_SECONDS, &mut s);
+            }
+            assert_eq!(
+                usize::from(coast.carrying_fish.is_some())
+                    + usize::from(settler.carrying_fish.is_some()),
+                1
+            );
+            assert_eq!(s.fishery.count(FishLocation::CarriedPreserved), 1);
         }
     }
     #[test]

@@ -298,6 +298,7 @@ fn sync(
                         *visible = Visibility::Hidden;
                         continue;
                     }
+                    GrainLocation::Home(2) => crate::homestead::pantry(i),
                     GrainLocation::Home(_) => crate::household::pantry_position(i),
                     GrainLocation::Ground => grain_position(i),
                     GrainLocation::Carried => {

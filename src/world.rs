@@ -524,6 +524,7 @@ fn pine_position(i: u32) -> Vec2 {
 }
 pub fn walkable(p: Vec2) -> bool {
     inside_shore(p)
+        && !crate::homestead::blocks(p)
         && !crate::landscape::tree_blocks(p)
         && !crate::landscape::wall_blocks(p)
         && !crate::livestock::fence_blocks(p)

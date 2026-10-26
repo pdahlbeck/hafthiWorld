@@ -52,11 +52,10 @@ impl Settlement {
                 .salt
                 .iter()
                 .all(|&s| s == SaltLocation::Consumed)
-            || !self
-                .fishery
-                .fish
-                .iter()
-                .all(|&f| f == FishLocation::Eaten(self.household.id))
+            || !self.fishery.fish.iter().all(|&f| {
+                f == FishLocation::Eaten(self.household.id)
+                    || (self.homestead.arrived && f == FishLocation::Eaten(2))
+            })
         {
             return Some(
                 "Finish preserving, supplying and eating the current fish; stored goods are never overwritten.",
@@ -128,6 +127,23 @@ mod tests {
             w.advance(1.0, s);
         }
         panic!("renewal blocked: {:?}", s.next_shore_round_blocker());
+    }
+    #[test]
+    fn consumed_coastal_fish_can_belong_to_either_active_household() {
+        let mut s = Settlement::default();
+        s.calendar.advance(YEAR_SECONDS);
+        s.voyage.phase = VoyagePhase::Completed;
+        s.flock.wool.fill(WoolLocation::Exported);
+        s.barter.salt.fill(SaltLocation::Consumed);
+        s.fishery.fish = [
+            FishLocation::Eaten(1),
+            FishLocation::Eaten(2),
+            FishLocation::Eaten(1),
+            FishLocation::Eaten(2),
+        ];
+        assert!(s.request_shipment().is_err());
+        s.homestead.arrived = true;
+        assert_eq!(s.request_shipment(), Ok(true));
     }
     #[test]
     fn renewed_work_uses_the_same_two_workers_in_both_views() {

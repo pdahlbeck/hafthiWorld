@@ -147,7 +147,11 @@ impl Worker {
                 }
             }
             C::LoadingMeal => {
-                assert_eq!(s.fishery.fish[self.target], F::PreservedStored);
+                // Another household may claim this shared portion while we walk.
+                if s.fishery.fish[self.target] != F::PreservedStored {
+                    self.start(Task::Idle);
+                    return;
+                }
                 s.fishery.fish[self.target] = F::CarriedPreserved;
                 self.carrying_fish = Some(self.target);
                 self.coastal_start(C::ToFishHome);

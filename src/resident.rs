@@ -115,7 +115,7 @@ fn spawn_models(
 ) {
     for entity in workers
         .iter()
-        .filter(|(_, w)| matches!(w.0, 1 | 2))
+        .filter(|(_, w)| matches!(w.0, 1..=3))
         .map(|(e, _)| e)
         .chain(visitors.iter())
     {
@@ -292,7 +292,8 @@ fn clip_for(w: &Worker) -> Clip {
         Clip::Walk
     } else {
         match w.task {
-            Task::Felling
+            Task::NewHome(_, crate::homestead::Phase::Assemble)
+            | Task::Felling
             | Task::Reaping
             | Task::Sowing
             | Task::Shearing

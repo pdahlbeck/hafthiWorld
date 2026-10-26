@@ -1,39 +1,39 @@
 # Settlement development after the renderer and anatomy fixes
 
-Issue #1 calls for a shared household economy, not several independent camera
-scenes. Keep each change small enough to test and play before expanding again.
+Issue #1 calls for a shared household economy and the ability to observe the same
+world in strategy and first person. Keep each slice small enough to test and play.
 
-## Delivered in this slice: repeat coastal production
+## Delivered: repeat coastal production
 
-A completed coastal batch no longer exhausts fishing, wool, salt and shipment
-forever. U authorizes a later spring/summer round only after fleece has regrown
-and every item from the old batch has reached its terminal state. Actual labor,
-physical carrying, payment and food consumption still perform the work. Existing
-orders, saved time, two-worker ownership and entity identities persist.
+U authorizes a later spring/summer round only after fleece has regrown and every
+item from the old batch has reached its terminal state. Actual labor, physical
+carrying, payment and food consumption still perform the work. The regression
+runs three material-balanced rounds, two worker entities across camera switches,
+save/restore during carrying and legacy saves.
 
-The full regression runs three material-balanced rounds (12 fish meals, six
-salting batches and three exported wool batches). A runtime test runs two rounds
-with the same two worker entities while repeatedly switching cameras. Save
-checks restore carried wool, the growth clocks and cumulative round history;
-legacy saves accept defaults. The original one-round tests remain applicable.
+## Delivered: another farmstead
 
-## Next scoped expansion: another farmstead
+The fixed second building requires actual timber transport and assembly before
+its resident can be invited. Household 2 has separately owned food/fuel, separate
+demand clocks and its own provider; the original founder and optional coastal
+helper retain their roles. Both homes compete for the same bounded inventory.
+Save/load, three-resident animation, collisions, camera switches and races for
+one item are tested. See [the second-household guide](second-household.md).
 
-Add a second actual household and building site funded by real materials, then
-allow a new household to settle. Define per-household storage, food/fuel demand,
-residents and work assignment before increasing the hard-coded worker count.
-Navigation must keep construction footprints and entrances traversable in both
-views. Test two households competing for limited goods, winter demand, save/load
-and moving real building materials; do not duplicate an inventory to create a
-new settlement.
+## Next scoped expansion: managed timber
+
+Six initial timber units cannot keep expanding homes and heating both houses
+indefinitely. Add a real replenishing forestry chain with growth, labor, finite
+cut yields, physical transport, saved state and allocation to construction versus
+winter fuel. Do not refund installed or burned wood to conjure building materials.
 
 ## Further slices
 
-- Renewable managed timber and real firewood demand beyond the first winters.
+- Independent fields and per-household work allocation.
+- More flexible building placement and navigation.
 - Additional historically researched crafts and limited Baltic trade goods.
-- More flexible field/building placement and worker scheduling.
-- Improved sheep and clothing art, then household/appearance variants.
+- Improved sheep/clothing art and household/appearance variants.
 
-Not included now: a second household, population growth, starvation/death,
-renewable timber, unrestricted construction, combat or a complete economy.
-Gameplay yields and growth intervals remain design choices, not historical data.
+Not included now: unlimited population, renewable timber, unrestricted building,
+starvation/death, combat or a complete economy. Yields and time intervals are
+design choices, not archaeological claims.

@@ -288,41 +288,33 @@ fn spawn_helper_visual(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let Some(helper) = workers
-        .iter()
-        .find(|w| w.id == 2 && w.role == WorkerRole::Coastal)
-    else {
-        for (entity, visual) in &visuals {
-            if visual.0 == 2 {
-                commands.entity(entity).despawn();
-            }
+    for (entity, visual) in &visuals {
+        if visual.0 != 1 && !workers.iter().any(|w| w.id == visual.0) {
+            commands.entity(entity).despawn();
         }
-        return;
-    };
-    if visuals.iter().any(|(_, v)| v.0 == 2) {
-        return;
     }
-    let tunic = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.20, 0.37, 0.48),
-        perceptual_roughness: 0.95,
-        ..default()
-    });
-    let skin = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.65, 0.43, 0.30),
-        perceptual_roughness: 0.95,
-        ..default()
-    });
-    commands
-        .spawn((
-            WorkerVisual(2),
-            Name::new("Resident 2 coastal worker"),
-            Mesh3d(meshes.add(crate::art::tunic())),
-            MeshMaterial3d(tunic.clone()),
-            Transform::from_xyz(helper.position.x, 0.9, helper.position.y),
-        ))
-        .with_children(|p| {
-            crate::art::human_parts(p, &mut meshes, &mut materials, tunic, skin);
-        });
+    for helper in workers.iter().filter(|w| w.id != 1) {
+        if visuals.iter().any(|(_, v)| v.0 == helper.id) {
+            continue;
+        }
+        let tunic = materials.add(Color::srgb(0.20, 0.37, 0.48));
+        let skin = materials.add(Color::srgb(0.65, 0.43, 0.30));
+        commands
+            .spawn((
+                WorkerVisual(helper.id),
+                Name::new(if helper.id == 2 {
+                    "Resident 2 coastal worker".into()
+                } else {
+                    format!("Resident {} home {}", helper.id, helper.home_id)
+                }),
+                Mesh3d(meshes.add(crate::art::tunic())),
+                MeshMaterial3d(tunic.clone()),
+                Transform::from_xyz(helper.position.x, 0.9, helper.position.y),
+            ))
+            .with_children(|p| {
+                crate::art::human_parts(p, &mut meshes, &mut materials, tunic, skin);
+            });
+    }
 }
 type AxeTransforms<'w, 's> = Query<
     'w,
@@ -421,13 +413,17 @@ fn sync_logs(
         let state = settlement.logs[log.0];
         *visibility = if matches!(
             state,
-            LogLocation::InTree | LogLocation::Installed | LogLocation::Burned(_)
+            LogLocation::InTree
+                | LogLocation::Installed
+                | LogLocation::Homestead
+                | LogLocation::Burned(_)
         ) {
             Visibility::Hidden
         } else {
             Visibility::Inherited
         };
         t.translation = match state {
+            LogLocation::Home(2) => crate::homestead::fuel(log.0),
             LogLocation::Home(_) => crate::hearth::log_position(log.0),
             LogLocation::Ground => {
                 let p = ground_log_position(log.0);
@@ -529,7 +525,7 @@ fn hud(
         for (mut text, mut font) in &mut texts {
             font.font_size = px(16).into();
             text.0 = format!(
-                "hafthiWorld | {} | Year {} {} | {:.1}s\nResidents {} | Food at home {} | Timber stored {} | Tree {}\nTab: views | I: inspect | F2: details | F3: timing\n{}",
+                "hafthiWorld | {} | Year {} {} | {:.1}s\nResidents {} | Food at homes {} | Timber stored {} | Tree {}\nTab: views | I: inspect | F2: details | F3: timing | G: farmstead\n{}",
                 if rig.mode == CameraMode::Strategy {
                     "STRATEGY"
                 } else {
@@ -539,8 +535,7 @@ fn hud(
                 s.calendar.season().label(),
                 clock.0,
                 workers.iter().count(),
-                s.farm.count(GrainLocation::Home(s.household.id))
-                    + s.fishery.count(Fish::Home(s.household.id)),
+                crate::homestead::food(&s, 1) + crate::homestead::food(&s, 2),
                 s.stored(),
                 orders.selected + 1,
                 orders.feedback
@@ -582,9 +577,9 @@ fn hud(
         "not ordered"
     };
     let controls = if rig.mode == CameraMode::Strategy {
-        "WASD orbit | Q/E zoom | Arrows pan | Click tree / 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | V seeds | J barter | K fuel | P fish | L salt | N helper | U boat | Tab walk | Esc quit"
+        "WASD orbit | Q/E zoom | Arrows pan | Click tree / 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | V seeds | J barter | K fuel | P fish | L salt | N helper | U boat | G farmstead | Tab walk | Esc quit"
     } else if rig.captured {
-        "WASD walk | Mouse look | 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | V seeds | J barter | K fuel | P fish | L salt | N helper | U boat | Tab strategy | Esc release mouse"
+        "WASD walk | Mouse look | 1-3 select | F harvest | B build | O sow | R reap | C shear | H home | V seeds | J barter | K fuel | P fish | L salt | N helper | U boat | G farmstead | Tab strategy | Esc release mouse"
     } else {
         "Click to capture mouse | Tab / Esc strategy (simulation keeps running)"
     };

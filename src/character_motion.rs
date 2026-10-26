@@ -121,11 +121,11 @@ impl MotionMemory {
         self.actors.retain(|id, _| ids.contains(id));
     }
     pub fn valid(&self, time: f64) -> bool {
-        self.actors.len() <= 2
+        self.actors.len() <= 3
             && self
                 .actors
                 .iter()
-                .all(|(id, state)| matches!(*id, 1 | 2) && state.valid(time))
+                .all(|(id, state)| matches!(*id, 1..=3) && state.valid(time))
     }
 }
 

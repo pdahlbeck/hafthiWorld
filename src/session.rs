@@ -93,9 +93,11 @@ impl Snapshot {
             || s.flock.ground.iter().any(|v| !v.is_finite())
             || !self.seconds.is_finite()
             || self.seconds < 0.0
+            || !s.homestead_valid()
             || s.household.id != 1
             || s.household.fish_used > s.household.food_used
-            || self.workers.len() != if s.coastal_assigned { 2 } else { 1 }
+            || self.workers.len()
+                != 1 + usize::from(s.coastal_assigned) + usize::from(s.homestead.arrived)
             || !self
                 .workers
                 .iter()
@@ -105,6 +107,11 @@ impl Snapshot {
                     .workers
                     .iter()
                     .any(|w| w.id == 2 && w.role == WorkerRole::Coastal))
+            || (s.homestead.arrived
+                && !self
+                    .workers
+                    .iter()
+                    .any(|w| w.id == 3 && w.home_id == 2 && w.role == WorkerRole::General))
             || s.coastal_owner
                 .is_some_and(|id| !self.workers.iter().any(|w| w.id == id))
             || self.workers.iter().any(|w| !w.valid_snapshot())
@@ -378,6 +385,84 @@ mod tests {
     }
     fn bytes(app: &mut App) -> Vec<u8> {
         Snapshot::capture(app.world_mut()).encode().unwrap()
+    }
+    #[test]
+    fn second_household_restores_real_cargo_three_residents_and_animation_memory() {
+        let mut game = app();
+        {
+            let mut s = game.world_mut().resource_mut::<Settlement>();
+            s.order_homestead();
+            s.request_helper();
+            s.household.request_supply();
+            s.farm.request_sow();
+
+            for i in 0..3 {
+                s.request_harvest(i);
+            }
+        }
+        let mut captured = false;
+        for _ in 0..8000 {
+            game.update();
+            {
+                let mut s = game.world_mut().resource_mut::<Settlement>();
+                s.farm.request_reap();
+                if s.homestead.complete && !s.homestead.invited {
+                    s.order_homestead();
+                }
+            }
+            let carries = game
+                .world_mut()
+                .query::<&Worker>()
+                .iter(game.world())
+                .any(|w| w.id == 3 && w.carrying_grain.is_some());
+            if carries {
+                let now = game.world().resource::<SimulationClock>().0;
+                game.world_mut()
+                    .init_resource::<crate::character_motion::MotionMemory>();
+                game.world_mut()
+                    .resource_mut::<crate::character_motion::MotionMemory>()
+                    .update(3, crate::character_motion::Clip::Walk, 0., now);
+                let encoded = bytes(&mut game);
+                let mut restored = app();
+                Snapshot::decode(&encoded)
+                    .unwrap()
+                    .restore(restored.world_mut());
+                assert_eq!(bytes(&mut restored), encoded);
+                assert_eq!(
+                    restored
+                        .world_mut()
+                        .query::<&Worker>()
+                        .iter(restored.world())
+                        .count(),
+                    3
+                );
+                let mut bad = Snapshot::decode(&encoded).unwrap();
+                bad.settlement.homestead.complete = false;
+                assert!(bad.encode().is_err());
+                captured = true;
+                break;
+            }
+        }
+        assert!(captured, "settler never carried actual harvested grain");
+    }
+    #[test]
+    fn legacy_snapshot_without_second_household_still_loads() {
+        let mut game = app();
+        let mut value = serde_json::to_value(Snapshot::capture(game.world_mut())).unwrap();
+        value["settlement"]
+            .as_object_mut()
+            .unwrap()
+            .remove("homestead");
+        let payload = serde_json::to_string(&value).unwrap();
+        let file = SaveFile {
+            version: 1,
+            checksum: checksum(payload.as_bytes()),
+            payload,
+        };
+        let old = Snapshot::decode(&serde_json::to_vec(&file).unwrap()).unwrap();
+        assert!(!old.settlement.homestead.ordered);
+        assert_eq!(old.settlement.homestead.household.id, 2);
+        assert_eq!(old.workers.len(), 1);
     }
     #[test]
     fn renewed_round_saves_real_cargo_and_regrowth_without_losing_history() {

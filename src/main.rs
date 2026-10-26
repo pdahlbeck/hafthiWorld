@@ -9,6 +9,7 @@ mod coast;
 mod farming;
 mod fishing;
 mod hearth;
+mod homestead;
 mod household;
 mod inspection;
 mod landscape;
@@ -83,6 +84,7 @@ fn main() -> AppExit {
             inspection::InspectionPlugin,
         ))
         .add_plugins((
+            homestead::HomesteadPlugin,
             resident::ResidentPlugin,
             rendering::CoastalRendererPlugin,
             water::WaterPlugin,

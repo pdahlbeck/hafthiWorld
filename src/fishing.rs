@@ -145,6 +145,7 @@ fn fish_position(location: FishLocation, index: usize, carrier: Vec2) -> (Vec2, 
         FishLocation::PreservedStored => {
             (STOCKPILE + Vec2::new(-0.8 + index as f32 * 0.26, 2.1), 0.36)
         }
+        FishLocation::Home(2) => (crate::homestead::pantry(index), 0.36),
         FishLocation::Home(_) => (
             crate::household::PANTRY + Vec2::new(-0.5 + index as f32 * 0.3, 0.42),
             0.4,
