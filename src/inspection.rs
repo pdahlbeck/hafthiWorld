@@ -21,6 +21,7 @@ const PANEL_HEIGHT: f32 = 310.0;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Subject {
     NewHome,
+    Timber,
     Home,
     Resident(u32),
     Boat,
@@ -47,7 +48,7 @@ impl Inspection {
             Some(Subject::Home) => Some(Subject::Resident(1)),
             Some(Subject::Resident(1)) if helper => Some(Subject::Resident(2)),
             Some(Subject::Resident(_)) => Some(Subject::Boat),
-            Some(Subject::Boat | Subject::NewHome) => None,
+            Some(Subject::Boat | Subject::NewHome | Subject::Timber) => None,
         };
     }
     fn over_panel(&self, cursor: Vec2, window: &Window) -> bool {
@@ -298,6 +299,8 @@ fn job(task: Task) -> &'static str {
         },
         Task::ToTree => "Walking to a tree",
         Task::Felling => "Felling a tree",
+        Task::ToPlant => "Walking to the planting plot",
+        Task::Planting => "Planting the next timber crop",
         Task::ToLog => "Collecting timber",
         Task::Loading => "Picking up timber",
         Task::ToStockpile => "Carrying timber to storage",
@@ -345,6 +348,18 @@ fn job(task: Task) -> &'static str {
 }
 fn description(subject: Subject, s: &Settlement, workers: &[&Worker]) -> String {
     match subject {
+        Subject::Timber => {
+            format!(
+                "TIMBER PLANNING\nPriority: {}\nStored {} | build reserve {}\nRequested winter deficit {}\n\nPlot 1: {}\nPlot 2: {}\nPlot 3: {}\n\nM: priority | X: plant\nF: harvest a mature tree\nGrowth pauses in winter.",
+                s.forestry.priority.label(),
+                s.stored(),
+                s.timber_build_need(),
+                s.timber_winter_need(),
+                s.plot_status(0),
+                s.plot_status(1),
+                s.plot_status(2)
+            )
+        }
         Subject::NewHome => {
             let h = &s.homestead;
             let pantry = crate::homestead::food(s, 2);

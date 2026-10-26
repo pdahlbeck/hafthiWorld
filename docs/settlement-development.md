@@ -20,12 +20,13 @@ helper retain their roles. Both homes compete for the same bounded inventory.
 Save/load, three-resident animation, collisions, camera switches and races for
 one item are tested. See [the second-household guide](second-household.md).
 
-## Next scoped expansion: managed timber
+## Delivered: forestry and timber planning
 
-Six initial timber units cannot keep expanding homes and heating both houses
-indefinitely. Add a real replenishing forestry chain with growth, labor, finite
-cut yields, physical transport, saved state and allocation to construction versus
-winter fuel. Do not refund installed or burned wood to conjure building materials.
+X orders real planting work, growth pauses in winter, and F harvests a new crop
+when mature. New units get their own ledger records, preserving all spent wood.
+M chooses Balanced, Building first or Winter reserves. Real transport still
+allocates every unit; priority changes never reclaim committed deliveries.
+See [controls and validation](forestry-and-timber.md).
 
 ## Further slices
 
@@ -34,6 +35,6 @@ winter fuel. Do not refund installed or burned wood to conjure building material
 - Additional historically researched crafts and limited Baltic trade goods.
 - Improved sheep/clothing art and household/appearance variants.
 
-Not included now: unlimited population, renewable timber, unrestricted building,
+Not included now: unlimited population, unrestricted building,
 starvation/death, combat or a complete economy. Yields and time intervals are
 design choices, not archaeological claims.

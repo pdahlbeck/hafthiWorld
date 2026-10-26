@@ -9,7 +9,7 @@ are shared by workers, collision and inspection.
 
 ## Play
 
-1. Begin a new session, or use an existing save with two unspent timber units.
+1. Use two unspent timber units, or replant spent plots with X and harvest another crop with F.
 2. Press **G** to order construction. Select trees with 1/2/3 and press **F** to
    fell them; the founder gathers real logs and delivers two stored units to
    the new plot. Do not spend every log on the rack or household firewood first.
@@ -36,10 +36,10 @@ not automatically invite anyone.
 ## Material and demand contracts
 
 The two construction units become `LogLocation::Homestead` and cannot also heat
-a home or build the rack. Six initial timber units are still the complete finite
-supply: rack (2), second house (2), and remaining winter fuel must compete. A save
-that has spent all timber can inspect/order the site but cannot finish it; this
-slice adds neither renewable timber nor free replacement materials.
+a home or build the rack. The first crop supplies six units: rack (2), second
+house (2), and winter fuel must compete until another crop is ready. The
+[forestry slice](forestry-and-timber.md) lets spent plots regrow
+through actual planting, growth and felling; it does not refund these old units.
 
 Pantries and hearths own items by household ID. Each occupied home advances its
 own food and winter fuel clock once per world tick, irrespective of how many

@@ -345,7 +345,7 @@ mod tests {
     #[test]
     fn real_construction_preserves_timber_and_clear_approaches() {
         let (mut s, mut w) = built();
-        let before = s.logs;
+        let before = s.logs.clone();
         s.order_homestead();
         assert!(s.homestead.invited);
         for _ in 0..10 {

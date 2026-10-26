@@ -10,7 +10,8 @@ pub fn walking(task: Task) -> bool {
     }
     matches!(
         task,
-        Task::ToCrewRest
+        Task::ToPlant
+            | Task::ToCrewRest
             | Task::ToTree
             | Task::ToLog
             | Task::ToStockpile
@@ -93,7 +94,8 @@ pub fn pose(w: &Worker, s: &Settlement, seconds: f64, side: f32, arm: bool) -> (
                 -0.2
             }
         }
-        Task::Reaping
+        Task::Planting
+        | Task::Reaping
         | Task::Sowing
         | Task::Shearing
         | Task::PreparingSeeds

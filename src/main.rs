@@ -8,6 +8,7 @@ mod cinematic;
 mod coast;
 mod farming;
 mod fishing;
+mod forestry;
 mod hearth;
 mod homestead;
 mod household;

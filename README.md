@@ -2,6 +2,15 @@
 
 Rust + Bevy 0.20 settlement simulation inspired by Viking Age Gotland. The second scoped milestone from [issue #1](https://github.com/pdahlbeck/hafthiWorld/issues/1) adds a playable resource chain: **order tree felling → carry logs to storage → carry stored timber to a construction site → finish a timber rack**. Strategy and first person observe the same running ECS world. Milestone 3 adds an original procedural coastal visual pass and portable performance instrumentation. The following small slices add a crop/seed loop, a two-sheep fleece chain and a first owned household pantry and a finite shore barter offer, using the same worker and storage. The founder, optional coastal helper, three finite trees and material-backed timber rack remain the same shared simulation in both views. A fresh session is solo; **N** invites the second resident and assigns coastal work, as described below. Earlier smoke tests assume N is omitted.
 
+## Forestry and timber priorities
+
+This version adds **two steps together**: replanting/regrowth and timber planning.
+Select a felled plot with **1/2/3**, then press **X**. The founder must plant it;
+the sapling takes two nonwinter growing seasons to mature. **F** then harvests
+new timber without restoring old burned or installed wood. **M** cycles Balanced,
+Building first and Winter reserves, and shows each plot's progress and timber needs.
+See the [controls, allocation rules and limits](docs/forestry-and-timber.md).
+
 ## Second farmstead
 
 Press **G** to order the marked farmstead west of the original house. It costs
@@ -12,9 +21,9 @@ three residents in two households. **H2** in the inspector, or clicking the new
 house, shows its own food and firewood. The new resident fetches real shared
 supplies for household 2; H/K keep controlling the original household.
 
-Start a new session or retain two unspent timber units for this test: the current
-three trees still provide only six units total, shared with the rack and winter
-fuel. Nothing refunds burned wood or duplicates goods for the new house.
+The initial six timber units are shared with the rack and winter fuel. If they
+are spent, replant the stumps and harvest another crop before building. Nothing
+refunds burned wood or duplicates goods for the new house.
 See [second-household controls, validation and limits](docs/second-household.md).
 
 ## Current resident review
@@ -84,6 +93,8 @@ macOS uses Metal; Linux needs a working graphics driver/display and Bevy's nativ
 | L | Order two raw fish salted with one real salt pouch | Same order while mouse is captured |
 | N | Invite one coastal worker to the existing household | Same order while mouse is captured |
 | G | Order second farmstead; once built, invite its resident | Same order while mouse is captured |
+| X | Order replanting at the selected felled plot | Same order while mouse is captured |
+| M | Cycle timber priority and open its inspector | Same order while mouse is captured |
 | U | Request collection of the shore visitor's four paid wool bundles | Same order while mouse is captured |
 | B | Order the fixed timber rack (two logs) | Same order while mouse is captured |
 | Escape | Quit gracefully | Release mouse; press again to return to strategy |

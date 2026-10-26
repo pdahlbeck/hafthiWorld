@@ -7,7 +7,7 @@ use crate::{
     orders::{ORDER_PANEL_BOTTOM, ORDER_PANEL_HEIGHT, OrderButton, OrderInput, OrderState},
     simulation::{
         BUILD_COST, BUILD_SITE, LogLocation, STOCKPILE, Settlement, SimulationClock, TOTAL_LOGS,
-        TREE_POSITIONS, Task, Worker, WorkerRole, ground_log_position,
+        TREE_POSITIONS, Task, Worker, WorkerRole,
     },
     trade::SaltLocation,
 };
@@ -28,7 +28,7 @@ impl Plugin for PresentationPlugin {
                 (
                     spawn_helper_visual,
                     (sync_worker, animate_residents).chain(),
-                    sync_logs,
+                    (refresh_log_visuals, sync_logs).chain(),
                     sync_trees,
                     sync_construction,
                     sync_selection,
@@ -45,6 +45,11 @@ pub(crate) struct WorkerVisual(pub(crate) u32);
 pub(crate) struct AxeVisual;
 #[derive(Component)]
 struct LogVisual(usize);
+#[derive(Resource)]
+struct LogRender {
+    mesh: Handle<Mesh>,
+    material: Handle<StandardMaterial>,
+}
 #[derive(Component)]
 struct TreeVisual(usize);
 #[derive(Component)]
@@ -133,6 +138,7 @@ fn setup(
                 MeshMaterial3d(wood.clone()),
                 Transform::from_xyz(p.x, 1.85, p.y),
                 TreeVisual(i),
+                Visibility::Inherited,
             ))
             .with_children(|parent| {
                 for layer in 0..6 {
@@ -161,6 +167,10 @@ fn setup(
         ));
     }
     let log = meshes.add(Cylinder::new(0.12, 0.85));
+    commands.insert_resource(LogRender {
+        mesh: log.clone(),
+        material: wood.clone(),
+    });
     for i in 0..TOTAL_LOGS {
         commands.spawn((
             Mesh3d(log.clone()),
@@ -346,7 +356,9 @@ fn sync_worker(
             || w.carrying_fish.is_some()
             || matches!(
                 w.task,
-                Task::ToFuelStore
+                Task::ToPlant
+                    | Task::Planting
+                    | Task::ToFuelStore
                     | Task::LoadingFuel
                     | Task::ToFuelHome
                     | Task::UnloadingFuel
@@ -404,6 +416,37 @@ fn animate_residents(
     }
 }
 
+fn refresh_log_visuals(
+    mut commands: Commands,
+    s: Res<Settlement>,
+    render: Option<Res<LogRender>>,
+    existing: Query<(Entity, &LogVisual)>,
+) {
+    let Some(render) = render else {
+        return;
+    };
+    if existing.iter().len() == s.logs.len() {
+        return;
+    }
+    let ids: std::collections::HashSet<usize> = existing.iter().map(|(_, v)| v.0).collect();
+    for (e, v) in &existing {
+        if v.0 >= s.logs.len() {
+            commands.entity(e).despawn();
+        }
+    }
+    for i in 0..s.logs.len() {
+        if !ids.contains(&i) {
+            commands.spawn((
+                LogVisual(i),
+                Name::new(format!("Log {i}")),
+                Mesh3d(render.mesh.clone()),
+                MeshMaterial3d(render.material.clone()),
+                Transform::default(),
+                Visibility::Hidden,
+            ));
+        }
+    }
+}
 fn sync_logs(
     settlement: Res<Settlement>,
     workers: Query<&Worker>,
@@ -423,10 +466,10 @@ fn sync_logs(
             Visibility::Inherited
         };
         t.translation = match state {
-            LogLocation::Home(2) => crate::homestead::fuel(log.0),
-            LogLocation::Home(_) => crate::hearth::log_position(log.0),
+            LogLocation::Home(2) => crate::homestead::fuel(settlement.forestry.slots[log.0]),
+            LogLocation::Home(_) => crate::hearth::log_position(settlement.forestry.slots[log.0]),
             LogLocation::Ground => {
-                let p = ground_log_position(log.0);
+                let p = settlement.log_ground_position(log.0);
                 Vec3::new(p.x, 0.38, p.y)
             }
             LogLocation::Carried => {
@@ -437,7 +480,7 @@ fn sync_logs(
                 Vec3::new(worker.position.x, 1.15, worker.position.y + 0.32)
             }
             LogLocation::Stored => {
-                let slot = log.0;
+                let slot = settlement.forestry.slots[log.0];
                 Vec3::new(
                     STOCKPILE.x + (slot % 3) as f32 * 0.4 - 0.4,
                     0.43 + (slot / 3) as f32 * 0.23,
@@ -453,9 +496,20 @@ fn sync_logs(
         };
     }
 }
-fn sync_trees(settlement: Res<Settlement>, mut trees: Query<(&TreeVisual, &mut Visibility)>) {
-    for (tree, mut v) in &mut trees {
-        *v = if settlement.trees[tree.0].felled {
+fn sync_trees(
+    settlement: Res<Settlement>,
+    mut trees: Query<(&TreeVisual, &mut Visibility, &mut Transform)>,
+) {
+    for (tree, mut v, mut t) in &mut trees {
+        let plot = &settlement.forestry.plots[tree.0];
+        let scale = if plot.growing {
+            0.15 + 0.85 * (plot.growth / crate::forestry::GROW_SECONDS) as f32
+        } else {
+            1.0
+        };
+        t.scale = Vec3::splat(scale);
+        t.translation.y = 0.2 + 1.65 * scale;
+        *v = if settlement.trees[tree.0].felled && !plot.growing {
             Visibility::Hidden
         } else {
             Visibility::Inherited
@@ -525,7 +579,7 @@ fn hud(
         for (mut text, mut font) in &mut texts {
             font.font_size = px(16).into();
             text.0 = format!(
-                "hafthiWorld | {} | Year {} {} | {:.1}s\nResidents {} | Food at homes {} | Timber stored {} | Tree {}\nTab: views | I: inspect | F2: details | F3: timing | G: farmstead\n{}",
+                "hafthiWorld | {} | Year {} {} | {:.1}s\nResidents {} | Food at homes {} | Timber stored {} | Tree {}\nTab: views | I: inspect | F2: details | F3: timing | G: farmstead | X: plant | M: timber\n{}",
                 if rig.mode == CameraMode::Strategy {
                     "STRATEGY"
                 } else {
@@ -709,6 +763,75 @@ mod tests {
             ));
         app.update();
         app
+    }
+    #[test]
+    fn saplings_and_new_timber_render_without_replacing_old_entities() {
+        let mut app = crew_app();
+        app.world_mut()
+            .resource_mut::<crate::session::Session>()
+            .paused = true;
+        let original: Vec<Entity> = app
+            .world_mut()
+            .query_filtered::<Entity, With<LogVisual>>()
+            .iter(app.world())
+            .collect();
+        let tree = app
+            .world_mut()
+            .query::<(Entity, &TreeVisual)>()
+            .iter(app.world())
+            .find(|(_, t)| t.0 == 0)
+            .unwrap()
+            .0;
+        let mut s = Settlement::default();
+        let mut worker = Worker::default();
+        s.request_harvest(0);
+        worker.advance(100., &mut s);
+        s.request_planting(0);
+        worker.advance(30., &mut s);
+        app.world_mut().insert_resource(s.clone());
+        app.update();
+        let scale = app.world().get::<Transform>(tree).unwrap().scale.x;
+        assert!(
+            scale >= 0.15 && scale < 1.0,
+            "scale {scale} plot {:?}",
+            app.world().resource::<Settlement>().forestry.plots[0]
+        );
+        assert_ne!(
+            *app.world().get::<Visibility>(tree).unwrap(),
+            Visibility::Hidden
+        );
+        worker.advance(1000., &mut s);
+        s.request_harvest(0);
+        worker.advance(100., &mut s);
+        app.world_mut().insert_resource(s);
+        app.update();
+        assert_eq!(
+            app.world_mut()
+                .query::<&LogVisual>()
+                .iter(app.world())
+                .count(),
+            8
+        );
+        assert!(
+            original
+                .iter()
+                .all(|&id| app.world().get::<LogVisual>(id).is_some())
+        );
+        assert!(app.world().get::<TreeVisual>(tree).is_some());
+        app.world_mut().insert_resource(Settlement::default());
+        app.update();
+        assert_eq!(
+            app.world_mut()
+                .query::<&LogVisual>()
+                .iter(app.world())
+                .count(),
+            6
+        );
+        assert!(
+            original
+                .iter()
+                .all(|&id| app.world().get::<LogVisual>(id).is_some())
+        );
     }
     #[test]
     fn actual_hauler_limbs_pause_and_restore_with_saved_heading_and_clock() {
@@ -1114,7 +1237,7 @@ mod tests {
                     delivered = true;
                     assert_eq!(
                         app.world().get::<Transform>(id).unwrap().translation,
-                        crate::hearth::log_position(slot)
+                        crate::hearth::log_position(s.forestry.slots[slot])
                     );
                     assert_ne!(
                         *app.world().get::<Visibility>(id).unwrap(),

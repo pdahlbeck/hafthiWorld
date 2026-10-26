@@ -93,6 +93,7 @@ impl Snapshot {
             || s.flock.ground.iter().any(|v| !v.is_finite())
             || !self.seconds.is_finite()
             || self.seconds < 0.0
+            || !s.forestry.valid(&s.logs, &s.trees)
             || !s.homestead_valid()
             || s.household.id != 1
             || s.household.fish_used > s.household.food_used
@@ -114,7 +115,7 @@ impl Snapshot {
                     .any(|w| w.id == 3 && w.home_id == 2 && w.role == WorkerRole::General))
             || s.coastal_owner
                 .is_some_and(|id| !self.workers.iter().any(|w| w.id == id))
-            || self.workers.iter().any(|w| !w.valid_snapshot())
+            || self.workers.iter().any(|w| !w.valid_snapshot(s.logs.len()))
         {
             return Err("The saved session has invalid residents or time.".into());
         }
@@ -387,6 +388,50 @@ mod tests {
         Snapshot::capture(app.world_mut()).encode().unwrap()
     }
     #[test]
+    fn forestry_snapshots_preserve_growth_new_log_ids_and_timber_priority() {
+        let mut s = Settlement::default();
+        let mut w = Worker::default();
+        s.request_harvest(0);
+        w.advance(100., &mut s);
+        s.request_planting(0);
+        w.advance(30., &mut s);
+        let make = |s: Settlement, w: Worker| Snapshot {
+            settlement: s,
+            workers: vec![w],
+            seconds: 2000.,
+            daylight: Daylight::default(),
+            resident_motion: default(),
+        };
+        let growing = make(s.clone(), w.clone()).encode().unwrap();
+        assert_eq!(
+            Snapshot::decode(&growing).unwrap().encode().unwrap(),
+            growing
+        );
+        w.advance(1000., &mut s);
+        s.request_harvest(0);
+        for _ in 0..1000 {
+            w.advance(0.25, &mut s);
+            if w.carrying.is_some_and(|i| i >= 6) {
+                break;
+            }
+        }
+        assert!(w.carrying.is_some_and(|i| i >= 6));
+        s.forestry.priority = crate::forestry::TimberPriority::Winter;
+        let encoded = make(s, w).encode().unwrap();
+        let snapshot = Snapshot::decode(&encoded).unwrap();
+        assert_eq!(snapshot.settlement.logs.len(), 8);
+        assert_eq!(
+            snapshot.settlement.forestry.priority,
+            crate::forestry::TimberPriority::Winter
+        );
+        let mut game = app();
+        snapshot.restore(game.world_mut());
+        assert_eq!(bytes(&mut game), encoded);
+        let mut bad = Snapshot::decode(&encoded).unwrap();
+        bad.settlement.forestry.origins.pop();
+        assert!(bad.encode().is_err());
+    }
+    #[test]
     fn second_household_restores_real_cargo_three_residents_and_animation_memory() {
         let mut game = app();
         {
@@ -453,6 +498,10 @@ mod tests {
             .as_object_mut()
             .unwrap()
             .remove("homestead");
+        value["settlement"]
+            .as_object_mut()
+            .unwrap()
+            .remove("forestry");
         let payload = serde_json::to_string(&value).unwrap();
         let file = SaveFile {
             version: 1,

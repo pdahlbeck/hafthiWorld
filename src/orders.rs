@@ -50,12 +50,14 @@ pub enum OrderButton {
     InviteHelper,
     CollectWool,
     Homestead,
+    Plant,
+    TimberPriority,
 }
 fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
     match order {
         OrderButton::Select(i) if i < TREE_POSITIONS.len() => {
             ui.selected = i;
-            ui.feedback = "Tree selected. F / Harvest orders felling.";
+            ui.feedback = "Tree selected. F harvests a mature tree; X replants its stump; M shows timber planning.";
         }
         OrderButton::Select(_) => {}
         OrderButton::Harvest => {
@@ -65,7 +67,28 @@ fn apply(order: OrderButton, ui: &mut OrderState, settlement: &mut Settlement) {
                     "Harvest ordered. Worker will fell the tree and store its logs."
                 }
             } else {
-                "This tree is already ordered or felled."
+                "The plot is not ready, is already ordered, or needs space in timber storage. M shows its state."
+            };
+        }
+        OrderButton::Plant => {
+            ui.feedback = if settlement.request_planting(ui.selected) {
+                "Planting ordered. The founder must plant the stump before its next timber crop can grow."
+            } else {
+                "Select a felled plot without an existing planting order or sapling."
+            };
+        }
+        OrderButton::TimberPriority => {
+            settlement.forestry.priority = settlement.forestry.priority.next();
+            ui.feedback = match settlement.forestry.priority {
+                crate::forestry::TimberPriority::Balanced => {
+                    "Balanced timber: reserve outstanding building costs, share remaining winter wood."
+                }
+                crate::forestry::TimberPriority::Building => {
+                    "Building first: prioritize ready construction work and protect its remaining timber."
+                }
+                crate::forestry::TimberPriority::Winter => {
+                    "Winter reserves: protect the requested household fuel stocks before spending wood on construction."
+                }
             };
         }
         OrderButton::Homestead => {
@@ -182,8 +205,26 @@ pub(crate) fn pick_tree_hit(
         .enumerate()
         .filter_map(|(i, p)| {
             let felled = settlement.trees[i].felled;
-            let center = Vec3::new(p.x, if felled { 0.4 } else { 2.25 }, p.y);
-            let radius = if felled { 0.3 } else { 0.85 };
+            let plot = &settlement.forestry.plots[i];
+            let scale = if plot.growing {
+                0.15 + 0.85 * (plot.growth / crate::forestry::GROW_SECONDS) as f32
+            } else {
+                1.0
+            };
+            let center = Vec3::new(
+                p.x,
+                if felled && !plot.growing {
+                    0.4
+                } else {
+                    0.2 + 2.05 * scale
+                },
+                p.y,
+            );
+            let radius = if felled && !plot.growing {
+                0.3
+            } else {
+                0.85 * scale
+            };
             let offset = origin - center;
             let b = offset.dot(direction);
             let disc = b * b - offset.length_squared() + radius * radius;
@@ -255,6 +296,13 @@ fn issue_orders(
     }
     if input.keys.just_pressed(KeyCode::KeyF) {
         apply(OrderButton::Harvest, &mut ui, &mut settlement);
+    }
+    if input.keys.just_pressed(KeyCode::KeyX) {
+        apply(OrderButton::Plant, &mut ui, &mut settlement);
+    }
+    if input.keys.just_pressed(KeyCode::KeyM) {
+        apply(OrderButton::TimberPriority, &mut ui, &mut settlement);
+        input.inspection.subject = Some(crate::inspection::Subject::Timber);
     }
     if input.keys.just_pressed(KeyCode::KeyG) {
         apply(OrderButton::Homestead, &mut ui, &mut settlement);
@@ -525,6 +573,28 @@ mod tests {
                 allowed
             );
 
+            {
+                let mut s = app.world_mut().resource_mut::<Settlement>();
+                s.trees[0].felled = true;
+                s.forestry.plots[0] = crate::forestry::Plot::default();
+                s.forestry.priority = crate::forestry::TimberPriority::Balanced;
+            }
+            {
+                let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+                keys.reset_all();
+                keys.press(KeyCode::KeyX);
+                keys.press(KeyCode::KeyM);
+            }
+            app.update();
+            assert_eq!(
+                app.world().resource::<Settlement>().forestry.plots[0].ordered,
+                allowed
+            );
+            assert_eq!(
+                app.world().resource::<Settlement>().forestry.priority
+                    == crate::forestry::TimberPriority::Building,
+                allowed
+            );
             app.world_mut().resource_mut::<Settlement>().flock = crate::livestock::Flock::default();
             {
                 let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();

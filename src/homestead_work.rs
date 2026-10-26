@@ -13,7 +13,9 @@ impl Worker {
             self.house_start(Job::Build, Phase::ToGate);
             return true;
         }
-        if let Some(i) = s.logs.iter().position(|&l| l == LogLocation::Stored) {
+        if s.timber_for_build()
+            && let Some(i) = s.logs.iter().position(|&l| l == LogLocation::Stored)
+        {
             self.target = i;
             self.house_start(Job::Build, Phase::ToStore);
             return true;
@@ -45,7 +47,10 @@ impl Worker {
             } else {
                 crate::hearth::FUEL_TARGET
             };
-            if s.homestead.household.hearth.ordered && s.count(LogLocation::Home(2)) < target {
+            if s.timber_for_fuel()
+                && s.homestead.household.hearth.ordered
+                && s.count(LogLocation::Home(2)) < target
+            {
                 s.logs
                     .iter()
                     .position(|&l| l == LogLocation::Stored)
@@ -123,7 +128,10 @@ impl Worker {
             Phase::Load => {
                 let loaded = match job {
                     Job::Build | Job::Fuel => {
-                        if s.logs[self.target] != LogLocation::Stored {
+                        if s.logs[self.target] != LogLocation::Stored
+                            || (job == Job::Fuel && !s.timber_for_fuel())
+                            || (job == Job::Build && !s.timber_for_build())
+                        {
                             false
                         } else {
                             s.logs[self.target] = LogLocation::Carried;
@@ -166,7 +174,7 @@ impl Worker {
                     }
                     Job::Fuel => {
                         let i = self.carrying.take().expect("owned firewood");
-                        s.logs[i] = LogLocation::Home(2);
+                        s.place_log(i, LogLocation::Home(2));
                     }
                     Job::Grain => {
                         let i = self.carrying_grain.take().expect("owned grain");

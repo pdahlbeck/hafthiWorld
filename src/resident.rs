@@ -297,6 +297,7 @@ fn clip_for(w: &Worker) -> Clip {
             | Task::Reaping
             | Task::Sowing
             | Task::Shearing
+            | Task::Planting
             | Task::PreparingSeeds => Clip::Work,
             Task::Coastal(CoastalTask::Salting | CoastalTask::Fishing) => Clip::Table,
             _ => Clip::Idle,

@@ -179,7 +179,7 @@ mod tests {
         let mut a = Settlement::default();
         let mut b = Settlement::default();
         a.logs.fill(LogLocation::Home(1));
-        b.logs = a.logs;
+        b.logs = a.logs.clone();
         let mut wa = Worker::default();
         let mut wb = Worker::default();
         wa.advance(360.0, &mut a);

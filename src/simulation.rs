@@ -67,8 +67,10 @@ pub struct Construction {
 #[derive(Resource, Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct Settlement {
     pub trees: [Tree; TREE_POSITIONS.len()],
-    pub logs: [LogLocation; TOTAL_LOGS],
+    pub logs: Vec<LogLocation>,
     pub construction: Construction,
+    #[serde(default)]
+    pub forestry: crate::forestry::Forestry,
     pub farm: Farm,
     pub flock: Flock,
     pub household: Household,
@@ -89,8 +91,9 @@ impl Default for Settlement {
     fn default() -> Self {
         Self {
             trees: [Tree::default(); TREE_POSITIONS.len()],
-            logs: [LogLocation::InTree; TOTAL_LOGS],
+            logs: vec![LogLocation::InTree; TOTAL_LOGS],
             construction: Construction::default(),
+            forestry: crate::forestry::Forestry::default(),
             farm: Farm::default(),
             flock: Flock::default(),
             household: Household::default(),
@@ -119,6 +122,7 @@ impl Settlement {
             .advance(seconds, &mut self.flock.wool, &self.barter.salt);
         let growth_seconds = self.calendar.advance(seconds);
         self.farm.grow(growth_seconds);
+        self.forestry.advance(growth_seconds, &mut self.trees);
         self.household.hearth.advance(
             (seconds - growth_seconds).max(0.0),
             self.household.id,
@@ -150,10 +154,11 @@ impl Settlement {
         self.count(LogLocation::Installed)
     }
     pub fn request_harvest(&mut self, tree: usize) -> bool {
+        let room = self.harvest_room();
         let Some(t) = self.trees.get_mut(tree) else {
             return false;
         };
-        if t.ordered || t.felled {
+        if t.ordered || t.felled || (self.forestry.plots[tree].generation > 0 && !room) {
             return false;
         }
         t.ordered = true;
@@ -175,6 +180,8 @@ pub fn ground_log_position(log: usize) -> Vec2 {
 pub struct SimulationClock(pub f64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Task {
+    ToPlant,
+    Planting,
     NewHome(crate::homestead::Job, crate::homestead::Phase),
     Coastal(CoastalTask),
     ToCrewRest,
@@ -313,12 +320,12 @@ impl Default for Worker {
     }
 }
 impl Worker {
-    pub(crate) fn valid_snapshot(&self) -> bool {
+    pub(crate) fn valid_snapshot(&self, log_count: usize) -> bool {
         let limit = match self.task {
             Task::NewHome(crate::homestead::Job::Grain | crate::homestead::Job::Fish, _) => {
                 crate::farming::GRAIN_UNITS
             }
-            Task::ToTree | Task::Felling => TREE_POSITIONS.len(),
+            Task::ToTree | Task::Felling | Task::ToPlant | Task::Planting => TREE_POSITIONS.len(),
             Task::ToSheep | Task::Shearing => crate::livestock::SHEEP_COUNT,
             Task::LoadingSalt => crate::trade::SALT_UNITS,
             Task::Coastal(
@@ -338,7 +345,7 @@ impl Worker {
             Task::LoadingGrain | Task::ToFoodStore | Task::LoadingFood | Task::PreparingSeeds => {
                 crate::farming::GRAIN_UNITS
             }
-            _ => TOTAL_LOGS,
+            _ => log_count,
         };
         self.target < limit
             && self.position.is_finite()
@@ -437,7 +444,14 @@ impl Worker {
             }
             return false;
         }
+        if self.id == 1
+            && settlement.forestry.priority == crate::forestry::TimberPriority::Building
+            && (self.choose_new_build(settlement) || self.choose_rack(settlement))
+        {
+            return true;
+        }
         if settlement.household.hearth.ordered
+            && settlement.timber_for_fuel()
             && self.home_id == settlement.household.id
             && settlement.count(LogLocation::Home(self.home_id))
                 < settlement.first_home_fuel_limit()
@@ -482,21 +496,8 @@ impl Worker {
             self.start(Task::ToTradeStore);
             return true;
         }
-        if settlement.construction.ordered && !settlement.construction.complete {
-            if settlement.installed() == BUILD_COST {
-                self.start(Task::ToSite);
-                return true;
-            }
-            if let Some(log) = settlement
-                .logs
-                .iter()
-                .position(|&v| v == LogLocation::Stored)
-            {
-                self.target = log;
-                self.building_delivery = true;
-                self.start(Task::ToLog);
-                return true;
-            }
+        if self.choose_rack(settlement) {
+            return true;
         }
         if let Some(log) = settlement
             .logs
@@ -506,6 +507,11 @@ impl Worker {
             self.target = log;
             self.building_delivery = false;
             self.start(Task::ToLog);
+            return true;
+        }
+        if let Some(tree) = settlement.forestry.plots.iter().position(|p| p.ordered) {
+            self.target = tree;
+            self.start(Task::ToPlant);
             return true;
         }
         if let Some(tree) = settlement.trees.iter().position(|t| t.ordered && !t.felled) {
@@ -529,6 +535,24 @@ impl Worker {
         }
         self.start(Task::ToFarmGateway);
         true
+    }
+    fn choose_rack(&mut self, s: &Settlement) -> bool {
+        if !s.construction.ordered || s.construction.complete {
+            return false;
+        }
+        if s.installed() == BUILD_COST {
+            self.start(Task::ToSite);
+            return true;
+        }
+        if s.timber_for_build()
+            && let Some(log) = s.logs.iter().position(|&l| l == LogLocation::Stored)
+        {
+            self.target = log;
+            self.building_delivery = true;
+            self.start(Task::ToLog);
+            return true;
+        }
+        false
     }
     fn choose_sheep_task(&mut self, settlement: &mut Settlement) -> bool {
         if let Some(wool) = settlement
@@ -598,6 +622,7 @@ impl Worker {
                 }
                 Task::ToCrewRest
                 | Task::ToTree
+                | Task::ToPlant
                 | Task::ToLog
                 | Task::ToStockpile
                 | Task::ToSite
@@ -636,9 +661,11 @@ impl Worker {
                             settlement.flock.sheep[self.target].position + Vec2::new(0.0, 0.75)
                         }
                         Task::ToWool => settlement.flock.ground[self.target],
-                        Task::ToTree => TREE_POSITIONS[self.target] + Vec2::new(0.65, 0.45),
+                        Task::ToTree | Task::ToPlant => {
+                            TREE_POSITIONS[self.target] + Vec2::new(0.65, 0.45)
+                        }
                         Task::ToLog if self.building_delivery => STOCKPILE,
-                        Task::ToLog => ground_log_position(self.target),
+                        Task::ToLog => settlement.log_ground_position(self.target),
                         Task::ToStockpile
                         | Task::ToFarmGateway
                         | Task::DeliveringGrain
@@ -690,6 +717,7 @@ impl Worker {
                         Task::DeliveringGrain => Task::StoringGrain,
                         Task::FromField => Task::Idle,
                         Task::ToTree => Task::Felling,
+                        Task::ToPlant => Task::Planting,
                         Task::ToLog => Task::Loading,
                         Task::ToStockpile => Task::Unloading,
                         _ if self.carrying.is_some() => Task::Installing,
@@ -700,7 +728,11 @@ impl Worker {
                     let duration = match self.task {
                         Task::Felling => FELL_SECONDS,
                         Task::Assembling => BUILD_SECONDS,
-                        Task::PreparingSeeds | Task::Sowing | Task::Reaping | Task::Shearing => 4.0,
+                        Task::Planting
+                        | Task::PreparingSeeds
+                        | Task::Sowing
+                        | Task::Reaping
+                        | Task::Shearing => 4.0,
                         _ => HANDLING_SECONDS,
                     };
                     let used = seconds.min(duration - self.handling);
@@ -711,7 +743,8 @@ impl Worker {
                     }
                     match self.task {
                         Task::LoadingFuel => {
-                            if settlement.logs[self.target] != LogLocation::Stored
+                            if !settlement.timber_for_fuel()
+                                || settlement.logs[self.target] != LogLocation::Stored
                                 || settlement.count(LogLocation::Home(self.home_id))
                                     >= crate::hearth::FUEL_TARGET
                             {
@@ -724,7 +757,7 @@ impl Worker {
                         }
                         Task::UnloadingFuel => {
                             let log = self.carrying.take().expect("fuel delivery requires a log");
-                            settlement.logs[log] = LogLocation::Home(self.home_id);
+                            settlement.place_log(log, LogLocation::Home(self.home_id));
                             self.start(Task::FromHome);
                         }
                         Task::LoadingTradeWool => {
@@ -840,13 +873,12 @@ impl Worker {
                             settlement.farm.grain[grain] = GrainLocation::Stored;
                             self.start(Task::Idle);
                         }
+                        Task::Planting => {
+                            settlement.plant(self.target);
+                            self.start(Task::Idle);
+                        }
                         Task::Felling => {
-                            settlement.trees[self.target].felled = true;
-                            for log in
-                                self.target * LOGS_PER_TREE..(self.target + 1) * LOGS_PER_TREE
-                            {
-                                settlement.logs[log] = LogLocation::Ground;
-                            }
+                            settlement.fell(self.target);
                             self.start(Task::Idle);
                         }
                         Task::Loading => {
@@ -855,7 +887,9 @@ impl Worker {
                             } else {
                                 LogLocation::Ground
                             };
-                            if settlement.logs[self.target] != expected {
+                            if settlement.logs[self.target] != expected
+                                || (self.building_delivery && !settlement.timber_for_build())
+                            {
                                 self.start(Task::Idle);
                                 continue;
                             }
@@ -872,11 +906,11 @@ impl Worker {
                                 .carrying
                                 .take()
                                 .expect("delivery requires a carried log");
-                            settlement.logs[log] = if self.task == Task::Installing {
-                                LogLocation::Installed
+                            if self.task == Task::Installing {
+                                settlement.logs[log] = LogLocation::Installed;
                             } else {
-                                LogLocation::Stored
-                            };
+                                settlement.place_log(log, LogLocation::Stored);
+                            }
                             self.start(Task::Idle);
                         }
                         Task::Assembling => {
